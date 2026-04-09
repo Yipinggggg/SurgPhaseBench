@@ -1,0 +1,3 @@
+pipeline:
+  mode: end_to_end
+  end_to_end_config: configs/end_to_end_lstm.yaml

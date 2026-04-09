@@ -1,0 +1,6 @@
+outputs/*
+RAMIE_data/*
+Cholec80_data/*
+
+*.pth
+*.pkl

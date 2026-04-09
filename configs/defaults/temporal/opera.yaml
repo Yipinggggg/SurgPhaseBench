@@ -1,0 +1,8 @@
+model:
+  name: opera
+  d_model: 128
+  num_layers: 3
+  nhead: 4
+  dim_feedforward: 512
+  dropout: 0.1
+  causal: true

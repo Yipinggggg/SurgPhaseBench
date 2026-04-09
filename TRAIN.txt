@@ -1,0 +1,23 @@
+#!/bin/bash
+
+#SBATCH -p gpu_a100
+#SBATCH -t 24:00:00
+#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-gpu=16
+#SBATCH --job-name=SurgPhaseBench
+#SBATCH --error=/projects/0/prjs1363/error/slurm_error_%A.error
+#SBATCH --output=/projects/0/prjs1363/output/slurm_output_%A.out
+
+source ~/.bashrc
+
+module load 2023
+module load 2024
+module load 2025
+module load CUDA/12.8.0
+module load FFmpeg/7.0.2-GCCcore-13.3.0
+
+conda activate eomt
+
+python scripts/train.py --config /projects/prjs1363/SurgPhaseBench/configs/cholec80/stage1_encoder.yaml

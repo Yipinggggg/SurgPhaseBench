@@ -1,0 +1,6 @@
+model:
+  name: actionformer
+  d_model: 64
+  n_head: 4
+  n_mha_win_size: 9
+  scale_factor: 2

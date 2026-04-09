@@ -1,0 +1,22 @@
+The following files were taken from 3rd party repositories in order to implement the baseline models:
+- Based on https://github.com/yabufarha/ms-tcn, https://github.com/tobiascz/TeCNO
+  - mstcn.py
+- From https://github.com/xjgaocs/Trans-SVNet
+  - transformer2_3_1.py
+- From https://github.com/xmed-lab/SAHC 
+  - SAHC/decoder.py
+  - SAHC/hierarch_tcn2.py
+  - SAHC/PositionalEncoding.py
+  - SAHC/utils.py
+- From https://github.com/ChinaYi/ASFormer
+  - ASFormer.py
+- Based on https://github.com/happyharrycn/actionformer_release 
+  - ActionFormer/modeling/backbones.py
+  - ActionFormer/modeling/blocks.py
+  - ActionFormer/modeling/necks.py
+  - ActionFormer/modeling/weight_init.py
+  - ActionFormer/baseline.py
+- Based on https://github.com/ddz16/TUT
+  - TUT/models/MyLayers.py
+  - TUT/models/TUT.py
+  - TUT/utils.py

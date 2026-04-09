@@ -1,0 +1,68 @@
+# =============================================================================
+# End-to-end: feature encoder + LSTM joint training
+# =============================================================================
+
+mode: end_to_end
+seed: 42
+
+data:
+  dataset: RAMIE
+  data_dir: /projects/prjs1363/SurgPhaseBench/RAMIE_data/
+  split: split3
+  batch_size: 1          # strict sequential training: one full video sequence per batch
+  shuffle_train: false   # preserve sequence order during training
+  seq_len: 128
+  num_workers: 8
+  img_size: 256
+  no_data_aug: false
+  extra_opts: {}
+
+model:
+  name: featureencoder+lstm
+  backbone: resnet50_gn
+  num_classes: 13
+  freeze: false
+  batch_size: 1
+  hidden_size: 512
+  lstm_layers: 1
+  bidirectional: false
+  dropout: 0.0
+
+optimizer:
+  name: adamw
+  lr: 1.0e-5
+  weight_decay: 1.0e-5
+
+scheduler:
+  name: cosine
+  eta_min: 1.0e-6
+
+training:
+  epochs: 100
+  grad_clip: 1.0
+  early_stopping:
+    enabled: true
+    monitor: val/f1
+    mode: max
+    patience: 15
+
+logging:
+  wandb:
+    enabled: true
+    project: surgical-phase-recognition-end2end
+    entity: null
+    name: 20260408_End2End_ResNet50LSTM_split3
+    tags: []
+
+  checkpoints:
+    dirpath: /projects/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/
+    save_top_k: 2
+    monitor: val/f1
+    mode: max
+    save_last: true
+
+evaluation:
+  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/test_results/
+  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/test_results/predictions/
+  plot_predictions: true
+  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/test_results/plots/

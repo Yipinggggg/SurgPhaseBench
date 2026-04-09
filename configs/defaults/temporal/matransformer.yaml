@@ -1,0 +1,8 @@
+model:
+  name: matransformer
+  num_decoders: 3
+  num_layers: 11
+  r1: 2
+  r2: 2
+  num_f_maps: 64
+  channel_masking_rate: 0.3

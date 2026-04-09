@@ -1,0 +1,78 @@
+# =============================================================================
+# Stage 3: temporal model training on precomputed frame features
+# =============================================================================
+
+seed: 42
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  feature_dir:  /projects/prjs1363/SurgPhaseBench/outputs/20260408_Stage1_DINOv3/features         # directory of {video_id}.pt files
+  split_dir:    /projects/prjs1363/SurgPhaseBench/outputs/20260408_Stage1_DINOv3/features           # contains train.split1.bundle, ...
+  split_name:   split1
+
+  batch_size:   1       # typically 1 for full-video sequences
+  num_workers:  4
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+model:
+  name:        mstcn      # mstcn | asformer | matransformer | opera | sahc | actionformer | mamba | mamba_multistage | trans_svnet | tut
+  feature_dim: 768          # must match the feature extractor output dim (ResNet-GN is usually 2048, but check your encoder)
+  num_classes: 13
+  max_seq_len: 12000
+
+# ---------------------------------------------------------------------------
+# Optimizer
+# ---------------------------------------------------------------------------
+optimizer:
+  name:         adamw
+  lr:           7.0e-4
+  weight_decay: 1.0e-4
+
+# ---------------------------------------------------------------------------
+# Scheduler  (set name: none to disable)
+# ---------------------------------------------------------------------------
+scheduler:
+  name:         cosine
+  warmup_ratio: 0.1
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+training:
+  epochs:           150
+  smoothing_weight: 0.25   # weight for TruncatedMSE smoothing (MS-TCN, ASFormer)
+  grad_clip:        1.0    # 0 or null to disable
+  early_stopping:
+    enabled:        true
+    monitor:        val/f1
+    mode:           max
+    patience:       20
+
+# ---------------------------------------------------------------------------
+# Logging & checkpointing
+# ---------------------------------------------------------------------------
+logging:
+  wandb:
+    enabled:  true
+    project:  surgical-phase-recognition
+    entity:   null          # your W&B username/team, or null
+    name:     null          # auto-generated if null
+    tags:     []
+
+  checkpoints:
+    dirpath:    /projects/prjs1363/SurgPhaseBench/outputs/20260408_temporal_mstcn/
+    save_top_k: 2
+    monitor:    val/f1
+    mode:       max
+    save_last:  true
+
+evaluation:
+  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_Stage1_vitl_dinov2_surgenet/test_results/
+  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_Stage1_vitl_dinov2_surgenet/test_results/predictions/
+  plot_predictions: true
+  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_Stage1_vitl_dinov2_surgenet/test_results/plots/
+

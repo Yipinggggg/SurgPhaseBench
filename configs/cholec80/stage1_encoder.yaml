@@ -1,0 +1,88 @@
+# =============================================================================
+# Stage 1: frame-level feature encoder training
+# =============================================================================
+
+mode: stage1
+seed: 42
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  dataset:     Cholec80              # Cholec80 | RAMIE | RARP | AutoLaparo
+  data_dir:    /projects/prjs1363/SurgPhaseBench/Cholec80_data/   # root of the frame dataset
+  split:       split2            # split key
+  batch_size:  128
+  seq_len:     1                  # 1 = individual frames; >1 = sliding window of frames
+  num_workers: 8
+  img_size:    256
+  no_data_aug: false
+
+  # Any extra opts to forward verbatim to prepare_dataset()
+  extra_opts: {}
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+model:
+  backbone:    resnet50    # any backbone defined in networks.py CNN
+  num_classes: 13              # number of surgical phases
+  freeze:      false           # freeze backbone (finetune head only)
+  batch_size:  128             # some backbones (e.g. GSViT) need this
+
+# ---------------------------------------------------------------------------
+# Optimizer
+# ---------------------------------------------------------------------------
+optimizer:
+  name:         adamw
+  lr:           1.0e-5
+  weight_decay: 1.0e-5
+
+# ---------------------------------------------------------------------------
+# Scheduler  (set name: none to disable)
+# ---------------------------------------------------------------------------
+scheduler:
+  name:     cosine
+  eta_min:  1.0e-6
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+training:
+  epochs:          100
+  label_smoothing: 0.0     # label smoothing for cross-entropy (0 = off)
+  grad_clip:       1.0
+  early_stopping:
+    enabled:       true
+    monitor:       val/f1
+    mode:          max
+    patience:      10
+# for debugging limit the number of training/validation batches per epoch (set to null to disable)
+  limit_train_batches: null
+  limit_val_batches:   null
+  val_check_interval: 1.0
+
+# ---------------------------------------------------------------------------
+# Logging & checkpointing
+# ---------------------------------------------------------------------------
+logging:
+  wandb:
+    enabled:  true
+    project:  surgical-phase-recognition-encoder
+    entity:   null
+    name:     20260409_Stage1_ResNet50_split2_cholec80_weightsnew
+    tags:     []
+
+  checkpoints:
+    dirpath:    /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsnew/
+    save_top_k: 2
+    monitor:    val/f1
+    mode:       max
+    save_last:  true
+
+evaluation:
+  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsnew/test_results/
+  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsnew/test_results/predictions/
+  plot_predictions: true
+  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsnew/test_results/plots/
+

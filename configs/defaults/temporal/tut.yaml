@@ -1,0 +1,18 @@
+model:
+  name: tut
+  l_seg: 300
+  d_model: 64
+  window_size: 31
+  baloss: false
+  d_ffn: 64
+  activation: relu
+  pre_norm: false
+  n_heads: 4
+  num_layers_PG: 5
+  num_R: 1
+  num_layers_R: 5
+  attention_dropout: 0.2
+  ffn_dropout: 0.3
+  input_dropout: 0.4
+  rpe_use: true
+  rpe_share: true

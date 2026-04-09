@@ -1,0 +1,5 @@
+pipeline:
+  mode: two_stage
+  stage1_config: configs/stage1_encoder.yaml
+  stage3_config: configs/stage3_temporal.yaml
+  feature_dir: outputs/features/RAMIE/

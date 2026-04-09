@@ -1,0 +1,16 @@
+model:
+  name: sahc
+  num_layers_PG: 10
+  num_layers_R: 10
+  num_R: 3
+  num_f_maps: 64
+  causal: true
+  fpn: true
+  output: true
+  feature: true
+  hier: true
+  trans: true
+  positional_encoding_type: learned
+  head_num: 8
+  embed_num: 512
+  block_num: 2
