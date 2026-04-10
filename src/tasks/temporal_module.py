@@ -53,14 +53,14 @@ class TemporalModule(BasePhaseModule):
 
     def _build_mask(self, features: torch.Tensor, T: int):
         B = features.shape[0]
-        if self.model_name in ("asformer", "matransformer"):
+        if self.model_name in ("asformer", "asformer_causal", "matransformer"):
             return torch.ones(B, 1, T, dtype=torch.float32, device=features.device)
         elif self.model_name in ("mstcn", "actionformer", "mamba", "mamba_multistage"):
             return torch.ones(B, T, dtype=torch.bool, device=features.device)
         return None  # opera, sahc handle masks internally
 
     def _forward_with_mask(self, features, mask):
-        if self.model_name in ("asformer", "matransformer", "mstcn", "actionformer",
+        if self.model_name in ("asformer", "asformer_causal", "matransformer", "mstcn", "actionformer",
                                "mamba", "mamba_multistage"):
             out = self.model(features, mask)
         else:
@@ -79,7 +79,7 @@ class TemporalModule(BasePhaseModule):
 
     def _build_smooth_loss(self):
         # Only used for multi-stage NCT models
-        if self.model_name in ("mstcn", "asformer", "matransformer", "mamba_multistage"):
+        if self.model_name in ("mstcn", "asformer", "asformer_causal", "matransformer", "mamba_multistage"):
             from TemporalModel.loss import TruncatedMSELoss
             self.smooth_loss_fn = TruncatedMSELoss(clamp_max=4, reduction="mean", channels_last=False)
             # get weight from config, default to 0.15 as in MS-TCN paper

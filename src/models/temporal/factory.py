@@ -10,6 +10,7 @@ from typing import Any
 _REGISTRY: dict[str, tuple[str, str, str]] = {
     "mstcn":            ("TemporalModel.MSTCN.mstcn", "MultiStageModel", "NCT"),
     "asformer":         ("TemporalModel.ASFormer.ASFormer", "MyTransformer", "NCT"),
+    "asformer_causal":  ("TemporalModel.ASFormerCausal.ASFormerCausal_clean", "ASFormerCausal", "NCT"),
     "matransformer":    ("TemporalModel.MaTransformer.model", "MaTransformer", "NCT"),
     "opera":            ("TemporalModel.Opera.opera", "OperaTransformerEncoder", "NTC"),
     "sahc":             ("TemporalModel.SAHC.hierarch_tcn2", "Hierarch_TCN2", "NTC"),
@@ -77,6 +78,18 @@ def _construct(key: str, Cls, feature_dim: int, num_classes: int, max_seq_len: i
         )
 
     elif key == "asformer":
+        return Cls(
+            num_decoders=kw.get("num_decoders", 3),
+            num_layers=kw.get("num_layers", 11),
+            r1=kw.get("r1", 2),
+            r2=kw.get("r2", 2),
+            num_f_maps=kw.get("num_f_maps", 64),
+            input_dim=feature_dim,
+            num_classes=num_classes,
+            channel_masking_rate=kw.get("channel_masking_rate", 0.3),
+        )
+
+    elif key == "asformer_causal":
         return Cls(
             num_decoders=kw.get("num_decoders", 3),
             num_layers=kw.get("num_layers", 11),
@@ -184,6 +197,7 @@ def _construct(key: str, Cls, feature_dim: int, num_classes: int, max_seq_len: i
             num_f_maps=kw.get("num_f_maps", 64),
             causal_model=kw.get("causal", True),
             local_window=kw.get("local_window", 30),
+            tecno_weights_path=kw.get("tecno_weights_path", None),
         )
 
     elif key == "tut":

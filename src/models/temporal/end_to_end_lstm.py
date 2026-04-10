@@ -29,10 +29,6 @@ class EndToEndLSTM(nn.Module):
         )
         out_dim = hidden_size * (2 if bidirectional else 1)
         self.classifier = nn.Linear(out_dim, int(model_cfg["num_classes"]))
-        self.hidden_state = None
-
-    def reset(self) -> None:
-        self.hidden_state = None
 
     def extract_image_features(self, frames: torch.Tensor) -> torch.Tensor:
         """Match legacy TemporalCNN.extract_image_features behavior.
@@ -56,6 +52,5 @@ class EndToEndLSTM(nn.Module):
             logits: (B, T, num_classes)
         """
         feats = self.extract_image_features(frames)
-        lstm_out, self.hidden_state = self.temporal(feats, self.hidden_state)
-        self.hidden_state = tuple(h.detach() for h in self.hidden_state)
+        lstm_out, _ = self.temporal(feats)
         return self.classifier(lstm_out)

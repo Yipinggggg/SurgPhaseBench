@@ -38,22 +38,9 @@ class EndToEndSequenceDataModule(pl.LightningDataModule):
     def __init__(self, cfg: dict):
         super().__init__()
         self.cfg = cfg["data"]
-        configured_batch_size = int(self.cfg.get("batch_size", 1))
-        configured_shuffle_train = bool(self.cfg.get("shuffle_train", False))
+        self.batch_size = int(self.cfg.get("batch_size", 1))
+        self.shuffle_train = bool(self.cfg.get("shuffle_train", True))
 
-        if configured_batch_size != 1:
-            print(
-                f"[EndToEndSequenceDataModule] Overriding data.batch_size={configured_batch_size} -> 1 "
-                "for strict sequential end-to-end training."
-            )
-        if configured_shuffle_train:
-            print(
-                "[EndToEndSequenceDataModule] Overriding data.shuffle_train=True -> False "
-                "for strict sequential end-to-end training."
-            )
-
-        self.batch_size = 1
-        self.shuffle_train = False
         self.num_workers = self.cfg.get("num_workers", 4)
         self.seq_len = self.cfg.get("seq_len")
         self.seq_stride = self.cfg.get("seq_stride", self.seq_len)

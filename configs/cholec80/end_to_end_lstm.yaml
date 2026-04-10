@@ -1,0 +1,70 @@
+# =============================================================================
+# End-to-end: feature encoder + LSTM joint training
+# =============================================================================
+
+mode: end_to_end
+seed: 42
+
+data:
+  dataset:     Cholec80              # Cholec80 | RAMIE | RARP | AutoLaparo
+  data_dir:    /projects/prjs1363/SurgPhaseBench/Cholec80_data/   # root of the frame dataset
+  split:       split2            # split key
+  batch_size: 64          # aligned with MTRCNet-CL default train batch size
+  shuffle_train: true      # shuffled on sequences
+  seq_len: 8               # aligned with MTRCNet-CL default sequence length
+  seq_stride: 1            # sliding window stride (1 for dense predictions, seq_len for non-overlapping)
+  num_workers: 4
+  img_size: 256
+  no_data_aug: false
+  extra_opts: {}
+
+model:
+  name: featureencoder+lstm
+  backbone: resnet50
+  num_classes: 13
+  freeze: false
+  batch_size: 1
+  hidden_size: 512
+  lstm_layers: 1
+  bidirectional: false
+  dropout: 0.0
+
+optimizer:
+  name: adam
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+
+scheduler:
+  name: step
+  step_size: 10
+  gamma: 0.1
+
+training:
+  epochs: 25
+  grad_clip: 1.0
+  early_stopping:
+    enabled: true
+    monitor: val/f1
+    mode: max
+    patience: 15
+
+logging:
+  wandb:
+    enabled: true
+    project: surgical-phase-recognition-end2end
+    entity: null
+    name: 20260410_End2End_ResNet50LSTM_cholec80_split2
+    tags: []
+
+  checkpoints:
+    dirpath: /projects/prjs1363/SurgPhaseBench/outputs/20260410_End2End_ResNet50LSTM_cholec80_split2/
+    save_top_k: 2
+    monitor: val/f1
+    mode: max
+    save_last: true
+
+evaluation:
+  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260410_End2End_ResNet50LSTM_cholec80_split2/test_results/
+  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260410_End2End_ResNet50LSTM_cholec80_split2/test_results/predictions/
+  plot_predictions: true
+  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260410_End2End_ResNet50LSTM_cholec80_split2/test_results/plots/

@@ -22,4 +22,4 @@ conda activate eomt
 
 cd "/projects/prjs1363/SurgPhaseBench/"
 
-python scripts/train.py --config /projects/prjs1363/SurgPhaseBench/configs/tmrnet.yaml
+python scripts/train.py --config /projects/prjs1363/SurgPhaseBench/configs/cholec80/end_to_end_lstm.yaml

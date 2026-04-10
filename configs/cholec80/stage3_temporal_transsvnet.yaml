@@ -23,13 +23,14 @@ model:
   feature_dim: 2048          # must match the feature extractor output dim (ResNet-GN is usually 2048, but check your encoder)
   num_classes: 13
   max_seq_len: 12000
+  tecno_weights_path: /projects/prjs1363/SurgPhaseBench/outputs/20260410_temporal_mstcn_split1_cholec80_weightsresnet50v2/checkpoints/best_acc-epoch=003-val_acc=0.9196.ckpt
 
 # ---------------------------------------------------------------------------
 # Optimizer
 # ---------------------------------------------------------------------------
 optimizer:
-  name:         adam
-  lr:           1.0e-3
+  name:         adamw
+  lr:           1.0e-5
   weight_decay: 1.0e-4
 
 # ---------------------------------------------------------------------------
@@ -48,7 +49,7 @@ training:
     enabled:        true
     monitor:        val/acc
     mode:           max
-    patience:       20
+    patience:       150
 
 # ---------------------------------------------------------------------------
 # Logging & checkpointing

@@ -30,8 +30,6 @@ class EndToEndModule(BasePhaseModule):
 
     def _shared_step(self, batch):
         frames, labels = self._normalize_batch(batch)
-        # We NO LONGER call self.model.reset() here to allow carrying hidden states
-        # during training and validation. States are managed inside model.forward().
         logits = self(frames)  # (B, T, C)
         # Flatten temporal predictions so CE uses 2D input (N, C) + 1D targets (N,).
         loss = self.loss_fn(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
@@ -59,18 +57,16 @@ class EndToEndModule(BasePhaseModule):
         return loss
 
     def on_train_epoch_start(self) -> None:
-        self.model.reset()
+        pass
 
     def on_validation_epoch_start(self) -> None:
-        self.model.reset()
+        pass
 
     def on_test_epoch_start(self) -> None:
         super().on_test_epoch_start()
-        self.model.reset()
 
     def test_step(self, batch, batch_idx):
         frames, labels = self._normalize_batch(batch)
-        # Carry hidden state across segments of the same video.
         logits = self(frames)  # (B, T, C)
         loss = self.loss_fn(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
         preds = logits.argmax(dim=-1)

@@ -1,0 +1,81 @@
+# =============================================================================
+# Stage 3: temporal model training on precomputed frame features (Causal ASFormer)
+# =============================================================================
+
+seed: 42
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  feature_dir:  /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/features
+  split_dir:    /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/features
+  split_name:   split1
+
+  batch_size:   1       
+  num_workers:  4
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+model:
+  name:        asformer_causal
+  feature_dim: 2048          
+  num_classes: 13
+  max_seq_len: 18000
+  num_decoders: 3
+  num_layers: 11
+  r1: 2
+  r2: 2
+  num_f_maps: 64
+  channel_masking_rate: 0.3
+
+# ---------------------------------------------------------------------------
+# Optimizer
+# ---------------------------------------------------------------------------
+optimizer:
+  name:         adamw
+  lr:           7.0e-4
+  weight_decay: 1.0e-4
+
+# ---------------------------------------------------------------------------
+# Scheduler
+# ---------------------------------------------------------------------------
+scheduler:
+  name:         none
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+training:
+  epochs:           150
+  grad_clip:        1.0
+  early_stopping:
+    enabled:        true
+    monitor:        val/acc
+    mode:           max
+    patience:       20
+
+# ---------------------------------------------------------------------------
+# Logging & checkpointing
+# ---------------------------------------------------------------------------
+logging:
+  wandb:
+    enabled:  true
+    project:  surgical-phase-recognition
+    entity:   null
+    name:     20260410_temporal_asformer_causal_split1_cholec80_weightsresnet50v2
+    tags:     ["causal"]
+
+  checkpoints:
+    dirpath:    /projects/prjs1363/SurgPhaseBench/outputs/20260410_temporal_asformer_causal_split1_cholec80_weightsresnet50v2/
+    save_top_k: 2
+    monitor:    val/acc
+    mode:       max
+    save_last:  true
+
+evaluation:
+  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260410_temporal_asformer_causal_split1_cholec80_weightsresnet50v2/test_results/
+  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260410_temporal_asformer_causal_split1_cholec80_weightsresnet50v2/test_results/predictions/
+  plot_predictions: true
+  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260410_temporal_asformer_causal_split1_cholec80_weightsresnet50v2/test_results/plots/
