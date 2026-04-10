@@ -157,7 +157,9 @@ class CNN(nn.Module):
 			self.featureNet.fc = Identity()
 			self.feature_size = 512
 		elif backbone == 'resnet50':
-			self.featureNet = torchvision.models.resnet50(weights="IMAGENET1K_V1")
+			# https://docs.pytorch.org/vision/stable/models.html
+			from torchvision.models import ResNet50_Weights
+			self.featureNet = torchvision.models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
 			self.featureNet.fc = Identity()
 			self.feature_size = 2048
 			if opts.freeze:

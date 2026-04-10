@@ -30,7 +30,8 @@ class EndToEndModule(BasePhaseModule):
 
     def _shared_step(self, batch):
         frames, labels = self._normalize_batch(batch)
-        self.model.reset()
+        # We NO LONGER call self.model.reset() here to allow carrying hidden states
+        # during training and validation. States are managed inside model.forward().
         logits = self(frames)  # (B, T, C)
         # Flatten temporal predictions so CE uses 2D input (N, C) + 1D targets (N,).
         loss = self.loss_fn(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
@@ -57,9 +58,19 @@ class EndToEndModule(BasePhaseModule):
         self.log("val/f1", self.val_f1, on_epoch=True, prog_bar=True, batch_size=batch_size)
         return loss
 
+    def on_train_epoch_start(self) -> None:
+        self.model.reset()
+
+    def on_validation_epoch_start(self) -> None:
+        self.model.reset()
+
+    def on_test_epoch_start(self) -> None:
+        super().on_test_epoch_start()
+        self.model.reset()
+
     def test_step(self, batch, batch_idx):
         frames, labels = self._normalize_batch(batch)
-        self.model.reset()
+        # Carry hidden state across segments of the same video.
         logits = self(frames)  # (B, T, C)
         loss = self.loss_fn(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
         preds = logits.argmax(dim=-1)
@@ -74,6 +85,10 @@ class EndToEndModule(BasePhaseModule):
         self.log("test/f1", self.test_f1(flat_preds, flat_labels), batch_size=batch_size)
 
         video_ids = batch.get("video_id", [f"batch_{batch_idx}"] * batch_size)
+        # Handle cases where video_ids might be a single string (from collate) but batch_size is 1
+        if isinstance(video_ids, str):
+            video_ids = [video_ids]
+            
         mask = labels != -100
         self._append_test_rows(video_ids=video_ids, labels=labels, preds=preds, confs=confs, mask=mask)
         return loss

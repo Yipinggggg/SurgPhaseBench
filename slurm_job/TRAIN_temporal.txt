@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -p gpu_a100
+#SBATCH -p gpu_h100
 #SBATCH -t 24:00:00
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
@@ -20,4 +20,6 @@ module load FFmpeg/7.0.2-GCCcore-13.3.0
 
 conda activate eomt
 
-python scripts/train.py --config configs/stage3_temporal_asformer.yaml
+cd "/projects/prjs1363/SurgPhaseBench/"
+
+python scripts/train.py --config /projects/prjs1363/SurgPhaseBench/configs/cholec80/stage3_temporal_opera.yaml

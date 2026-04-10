@@ -57,15 +57,23 @@ def main():
         cfg["data"]["num_workers"] = args.num_workers
     cfg["data"]["no_data_aug"] = True
 
-    # Load trained encoder
-    from src.tasks.encoder_module import EncoderModule
-    # Load checkpoint weights on CPU first to avoid CUDA OOM during deserialization
-    # for large models, then move to GPU later for forward passes.
-    module = EncoderModule.load_from_checkpoint(
-        args.checkpoint,
-        cfg=cfg,
-        map_location="cpu",
-    )
+    # Detect extraction mode from config or checkpoint
+    mode = cfg.get("mode", "auto")
+    if mode == "auto":
+        checkpoint = torch.load(args.checkpoint, map_location="cpu")
+        state_dict = checkpoint.get("state_dict", {})
+        is_end_to_end = any(k.startswith("model.temporal") for k in state_dict.keys())
+        mode = "end_to_end" if is_end_to_end else "stage1"
+
+    if mode == "end_to_end":
+        print("Using EndToEndModule (SV-RCNet/LSTM) for feature extraction...")
+        from src.tasks.end_to_end_module import EndToEndModule
+        module = EndToEndModule.load_from_checkpoint(args.checkpoint, cfg=cfg, map_location="cpu")
+    else:
+        print("Using EncoderModule (Frame-level) for feature extraction...")
+        from src.tasks.encoder_module import EncoderModule
+        module = EncoderModule.load_from_checkpoint(args.checkpoint, cfg=cfg, map_location="cpu")
+    
     module.eval()
 
     splits = ["train", "val", "test"] if args.split == "all" else [args.split]
@@ -111,7 +119,19 @@ def _extract_split(module, cfg: dict, split: str, output_dir: str):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     module = module.to(device)
-    module.encoder.eval()
+    
+    # Extraction helper
+    is_end_to_end = hasattr(module, "model") and hasattr(module.model, "extract_image_features")
+    if is_end_to_end:
+        print("Using FULL End-to-End model (Backbone + LSTM) for feature extraction...")
+        # To get the combined feature (LSTM output), we use the full model forward pass.
+        # But we need to ensure we return the temporal features before the final classifier.
+        extractor = module.model
+    else:
+        print("Using Frame Encoder for feature extraction...")
+        extractor = module.encoder
+
+    extractor.eval()
 
     current_vid: str | None = None
     current_feats: list[torch.Tensor] = []
@@ -123,8 +143,22 @@ def _extract_split(module, cfg: dict, split: str, output_dir: str):
             frames    = batch["frames"].to(device)
             labels    = batch["labels"]           # keep on CPU
             video_ids = batch["video_id"]
-
-            feats = module.encoder(frames).cpu()  # (B, feature_dim)
+            
+            # Ensure 5D (B, T, 3, H, W) for end-to-end models
+            if is_end_to_end and frames.ndim == 4:
+                frames = frames.unsqueeze(1) # (B, 1, 3, H, W)
+            
+            # Extract features
+            if is_end_to_end:
+                # Combined Extractions (CNN + LSTM)
+                # We want the output of the LSTM layer (temporal context)
+                # extractor is EndToEndLSTM
+                feats_cnn = extractor.extract_image_features(frames) # (B, T, C_cnn)
+                feats_lstm, _ = extractor.temporal(feats_cnn) # (B, T, C_lstm)
+                feats = feats_lstm.reshape(-1, feats_lstm.shape[-1]).cpu()
+            else:
+                # Standard encoder extraction (only CNN part)
+                feats = extractor(frames).cpu()  # (B, feature_dim)
 
             if isinstance(video_ids, str):
                 video_ids = [video_ids] * feats.shape[0]

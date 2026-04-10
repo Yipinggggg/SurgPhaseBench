@@ -1,0 +1,33 @@
+# TMRNet Benchmarking Configuration (Hybrid Pipeline)
+# 1. Prebuild Memory Bank with SV-RCNet (ResNet+LSTM)
+# 2. Run TMRNet with trainable backbone and Prebuilt Context
+
+model:
+  name: "tmrnet"         # Custom TMRNet hybrid architecture
+  backbone: "resnet50"   # The trainable part
+  memory_dim: 512        # Features from prebuilt SV-RCNet
+  num_classes: 7
+  dropout: 0.2
+  freeze: False
+
+data:
+  dataset: "Cholec80"
+  frames_dir: "Cholec80_data/frames_1fps"
+  labels_dir: "Cholec80_data/labels"
+  split_dir: "Cholec80_data/splits"
+  memory_bank_dir: "outputs/extracted_features/svrcnet" # PREBUILT features
+  batch_size: 1          # Sequential training
+  num_workers: 4
+  img_size: 224
+  seq_len: 1             # TMRNet processes one "Now" frame at a time
+  memory_window: 30      # History context T_mem (default 30 as per paper)
+
+trainer:
+  max_epochs: 25
+  accelerator: "gpu"
+  devices: 1
+  precision: 16-mixed
+
+optimizer:
+  lr: 5e-5               # TMRNet paper uses small LR for fine-tuning
+  weight_decay: 5e-4

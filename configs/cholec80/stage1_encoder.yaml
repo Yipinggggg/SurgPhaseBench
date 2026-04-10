@@ -35,7 +35,7 @@ model:
 # ---------------------------------------------------------------------------
 optimizer:
   name:         adamw
-  lr:           1.0e-5
+  lr:           5e-4
   weight_decay: 1.0e-5
 
 # ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ training:
   grad_clip:       1.0
   early_stopping:
     enabled:       true
-    monitor:       val/f1
+    monitor:       val/acc
     mode:          max
     patience:      10
 # for debugging limit the number of training/validation batches per epoch (set to null to disable)
@@ -70,19 +70,19 @@ logging:
     enabled:  true
     project:  surgical-phase-recognition-encoder
     entity:   null
-    name:     20260409_Stage1_ResNet50_split2_cholec80_weightsnew
+    name:     20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2
     tags:     []
 
   checkpoints:
-    dirpath:    /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsnew/
+    dirpath:    /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/
     save_top_k: 2
     monitor:    val/f1
     mode:       max
     save_last:  true
 
 evaluation:
-  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsnew/test_results/
-  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsnew/test_results/predictions/
+  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/test_results/
+  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/test_results/predictions/
   plot_predictions: true
-  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsnew/test_results/plots/
+  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/test_results/plots/
 

@@ -20,7 +20,9 @@ module load FFmpeg/7.0.2-GCCcore-13.3.0
 
 conda activate eomt
 
+cd "/projects/prjs1363/SurgPhaseBench/"
+
 python scripts/extract_features.py \
-    --config /projects/prjs1363/SurgPhaseBench/outputs/20260408_Stage1_vitl_dinov2_surgenet_split2_mixedprecision/config.yaml \
-    --checkpoint /projects/prjs1363/SurgPhaseBench/outputs/20260408_Stage1_vitl_dinov2_surgenet_split2_mixedprecision/checkpoints/best_acc-epoch=002-val_acc=0.7432.ckpt \
-    --output_dir /projects/prjs1363/SurgPhaseBench/outputs/20260408_Stage1_vitl_dinov2_surgenet_split2_mixedprecision/features/ \
+    --config /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/config.yaml \
+    --checkpoint /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/checkpoints/best_acc-epoch=016-val_acc=0.7758.ckpt \
+    --output_dir /projects/prjs1363/SurgPhaseBench/outputs/20260409_Stage1_ResNet50_split2_cholec80_weightsresnet50v2/features/ \

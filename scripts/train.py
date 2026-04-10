@@ -266,8 +266,16 @@ def main():
 
     print(f"Training mode: {mode}")
 
+    # ------ TMRNet: end-to-end with prebuilt memory bank ------
+    if mode == "tmrnet" or "tmrnet" in mode:
+        from src.tasks.tmrnet_module import TMRNetModule
+        from src.data.datamodules.tmrnet_datamodule import TMRNetDataModule
+
+        datamodule = TMRNetDataModule(cfg)
+        module = TMRNetModule(cfg)
+
     # ------ Stage 3: temporal model on precomputed features ------
-    if mode == "stage3" or "stage3" in mode:
+    elif mode == "stage3" or "stage3" in mode:
         from src.tasks.temporal_module import TemporalModule
         from src.data.datamodules.sequence_datamodule import SequenceDataModule
 
