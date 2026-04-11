@@ -8,7 +8,8 @@ from einops import rearrange
 from timm.layers import trunc_normal_
 
 from .activations import get_activation
-from ..utils import FEATURES, ATTENTION_WEIGHTS
+
+FEATURES, ATTENTION_WEIGHTS = "features", "attention_weights"
 
 
 class MyActivation(nn.Module):
@@ -20,6 +21,12 @@ class MyActivation(nn.Module):
 
     def forward(self, t):  # t = (x, mask); x is of shape N x S x C, mask is N x S (1 --> keep, 0 --> mask)
         x, mask = t
+
+        if mask is not None:
+            if mask.shape[1] < x.shape[1]:
+                pad_len = x.shape[1] - mask.shape[1]
+                mask = F.pad(mask, (0, pad_len))
+            x = x * mask[:, :x.size(1)].unsqueeze(-1)
         x = self.activation(x)
 
         return x, mask
@@ -97,11 +104,13 @@ class MyConv1d(nn.Module):
     def forward(self, t):  # t = (x, mask); x is of shape N x S x C, mask is N x S (1 --> keep, 0 --> mask)
         x, mask = t
 
-        x = x * mask.unsqueeze(-1)
+        if mask is not None:
+            if mask.shape[1] < x.shape[1]:
+                pad_len = x.shape[1] - mask.shape[1]
+                mask = F.pad(mask, (0, pad_len))
+            x = x * mask[:, :x.size(1)].unsqueeze(-1)
         x = x.permute(0, 2, 1)  # (N, S, C) -> (N, C, S)
         x = self.conv(x)
-        if self.causal and self.padding > 0:
-            x = x[:, :, :-self.padding]
         x = x.permute(0, 2, 1)  # (N, C, S) -> (N, S, C)
 
         return x, mask
@@ -150,7 +159,11 @@ class MyLayerNorm(nn.Module):
     def forward(self, t):  # t = (x, mask); x is of shape N x S x C, mask is N x S (1 --> keep, 0 --> mask)
         x, mask = t
 
-        x = x * mask.unsqueeze(-1)
+        if mask is not None:
+            if mask.shape[1] < x.shape[1]:
+                pad_len = x.shape[1] - mask.shape[1]
+                mask = F.pad(mask, (0, pad_len))
+            x = x * mask[:, :x.size(1)].unsqueeze(-1)
         x = self.norm(x)
 
         return x, mask
@@ -164,9 +177,10 @@ class DownsamplingConv1d(nn.Module):
             assert (dim_out >= dim_in and dim_out % dim_in == 0)
 
         self.causal = causal
-        self.padding = (factor - 1) if self.causal else 0
-        self.conv = nn.Conv1d(dim_in, dim_out, factor, stride=factor, padding=self.padding,
-                              groups=(dim_in if depthwise else 1), padding_mode='replicate')
+        # To maintain length S -> S/factor with padding, use factor-1 padding and then slice.
+        # However, for 1:1 length matches in U-Nets, we must be careful.
+        self.conv = nn.Conv1d(dim_in, dim_out, factor, stride=factor, padding=0,
+                              groups=(dim_in if depthwise else 1), padding_mode='zeros')
 
         self._init_weights(init_method, followed_by_relu)
         self.init_method = init_method
@@ -190,11 +204,13 @@ class DownsamplingConv1d(nn.Module):
     def forward(self, t):  # t = (x, mask); x is of shape N x S x C, mask is N x S (1 --> keep, 0 --> mask)
         x, mask = t
 
-        x = x * mask.unsqueeze(-1)
+        if mask is not None:
+            if mask.shape[1] < x.shape[1]:
+                pad_len = x.shape[1] - mask.shape[1]
+                mask = F.pad(mask, (0, pad_len))
+            x = x * mask[:, :x.size(1)].unsqueeze(-1)
         x = x.permute(0, 2, 1)  # (N, S, C) -> (N, C, S)
         x = self.conv(x)
-        if self.causal:
-            x = x[:, :, :-1]
         x = x.permute(0, 2, 1)  # (N, C, S) -> (N, S, C)
 
         return x, mask
@@ -234,7 +250,11 @@ class UpsamplingConv1d(nn.Module):
     def forward(self, t):  # t = (x, mask); x is of shape N x S x C, mask is N x S (1 --> keep, 0 --> mask)
         x, mask = t
 
-        x = x * mask.unsqueeze(-1)
+        if mask is not None:
+            if mask.shape[1] < x.shape[1]:
+                pad_len = x.shape[1] - mask.shape[1]
+                mask = F.pad(mask, (0, pad_len))
+            x = x * mask[:, :x.size(1)].unsqueeze(-1)
         x = x.permute(0, 2, 1)  # (N, S, C) -> (N, C, S)
         x = self.conv(x)
         x = x.permute(0, 2, 1)  # (N, C, S) -> (N, S, C)
@@ -286,6 +306,12 @@ class ResBlock(nn.Module):  # residual connection
         else:
             x, _ = self.block((x, mask))
         x, _ = self.dropout((x, mask))
+
+        if x.shape[1] != residual.shape[1]:
+            if x.shape[1] < residual.shape[1]:
+                x = F.pad(x, (0, 0, 0, residual.shape[1] - x.shape[1]))
+            else:
+                x = x[:, :residual.shape[1], :]
         x = residual + x
 
         if self.has_attn:
@@ -386,15 +412,12 @@ class MyAttention(nn.Module):
             raise ValueError("Unknown init_method {}".format(init_method))
 
     def forward(self, t):  # t = (x, mask); x is of shape N x S x C, mask is N x S (1 --> keep, 0 --> mask)
-        if self.causal is True:
-            assert (self.valid_mask is not None)
-
         x, mask = t
         N, S, C = x.shape
 
         q, k, v = self.to_qkv(x).chunk(3, dim=-1)
 
-        # split heads --> tensor shape N x nheads x S x (C // nheads)
+        # split heads --> tensor shape N x nheads x S x (C // nhFeads)
         q, k, v = map(lambda tensor: rearrange(tensor, 'n s (h d ) -> n h s d', h=self.nheads), (q, k, v))
 
         attn = (q @ k.permute(0, 1, 3, 2)) * self.scale  # N x nheads x S x S
@@ -407,24 +430,35 @@ class MyAttention(nn.Module):
         min_val = float('-inf')  # TODO: might be necessary to adjust min val in order to avoid NaN in softmax
         if self.valid_mask is not None:  # masking
             attn = attn.masked_fill(torch.logical_not(self.valid_mask[:S, :S]).view(1, 1, S, S), min_val)
+        elif self.causal:
+            indices = torch.arange(S, device=x.device)
+            mask_std = (indices.unsqueeze(0) >= indices.unsqueeze(1))
+            attn = attn.masked_fill(mask_std.view(1, 1, S, S) == 0, min_val)
+
         # prevent attending to padded positions
-        attn = attn.masked_fill(torch.logical_not(mask).view(N, 1, 1, S), min_val)
+        if mask is not None:
+            if mask.shape[1] < S:
+                pad_len = S - mask.shape[1]
+                mask = F.pad(mask, (0, pad_len))
+            attn = attn.masked_fill(torch.logical_not(mask[:, :S]).view(N, 1, 1, S), min_val)
 
         attn = F.softmax(attn, dim=-1)
         attn = self.attn_dropout(attn)
 
         # set attention of padded queries to zero
-        attn = attn.masked_fill(torch.logical_not(mask).view(N, 1, S, 1), 0)
+        if mask is not None:
+            attn = attn.masked_fill(torch.logical_not(mask[:, :S]).view(N, 1, S, 1), 0)
 
         y = attn @ v  # N x nheads x S x (C // nheads)
         # y = einsum('n h i j, n h j d -> n h i d', attn, v)
 
         # merge heads --> tensor shape N x S x C
         # y = y.transpose(1, 2).contiguous().view(N, S, C)
-        y = rearrange(y, 'n h s d -> n s (h d )',)
+        y = rearrange(y, 'n h s d -> n s (h d )')
 
         y = self.out_proj(y)
-        y = y * mask.unsqueeze(-1)
+        if mask is not None:
+            y = y * mask[:, :S].unsqueeze(-1)
 
         return {
             FEATURES: y,

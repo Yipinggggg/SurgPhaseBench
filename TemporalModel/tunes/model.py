@@ -3,6 +3,7 @@ import copy
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from einops import repeat, rearrange
 from einops.layers.torch import Rearrange
@@ -11,12 +12,12 @@ from .layer import MyActivation, MyDropout1d, MyLayerNorm, MyLinear, UpsamplingC
     MyAttention, create_causal_mask, create_relative_position_index, create_local_mask, PositionalEncoding, \
     ConvBlock, ResBlock
 from .token_aggregator import TokenAggregator, SimpleTokenAggregator
-from .template import ModelTemplate, TrainerTemplate
-from DinoTemporal.TemporalModel.plot import visualize_predictions, visualize_bottleneck_outputs, visualize_masked_bottleneck_outputs, \
-    visualize_attention_weights
-from DinoTemporal.utils import Cholec80, calculate_metrics
-from DinoTemporal.utils import LOGITS, FEATURES, ATTENTION_WEIGHTS, BOTTLENECK_LOGITS, \
-    FEATURE_SEQ, LABEL_SEQ, LABEL_SEQ_MULTISCALE, PADDING_MASK, LABELS_BOTTLENECK, TOKEN_MASK, MASKED_RATIO
+from .template import ModelTemplate
+
+
+LOGITS, FEATURES, ATTENTION_WEIGHTS, BOTTLENECK_LOGITS = "logits", "features", "attention_weights", "bottleneck_logits"
+FEATURE_SEQ, LABEL_SEQ, LABEL_SEQ_MULTISCALE, PADDING_MASK = "feature_seq", "label_seq", "label_seq_multiscale", "padding_mask"
+LABELS_BOTTLENECK, TOKEN_MASK, MASKED_RATIO = "labels_bottleneck", "token_mask", "masked_ratio"
 
 
 class ConvolutionalDownsampling(nn.Module):
@@ -34,7 +35,10 @@ class ConvolutionalDownsampling(nn.Module):
 
     def forward(self, t):  # t = (x, mask); x is of shape N x S x C, mask is N x S (1 --> keep, 0 --> mask)
         x, mask = self.layer(t)
-        mask = mask[:, ::self.scale_factor]  # downsample mask as well
+        if mask is not None:
+            mask = mask[:, ::self.scale_factor]  # downsample mask as well
+            if mask.shape[1] != x.shape[1]:
+                mask = mask[:, :x.shape[1]]
 
         return x, mask
 
@@ -51,14 +55,14 @@ class ConvolutionalUpsampling(nn.Module):
         )
 
     def forward(self, t):  # t = (x, mask); x is of shape N x S x C, mask is N x S (1 --> keep, 0 --> mask)
-        x, mask = self.layer(t)
+        x, _ = self.layer(t)
 
         return x, None  # low-resolution mask will be invalid
 
 
 class ConvStageDown(nn.Module):  # stack of convolutional blocks --> downsampling
     def __init__(self, dim, block_count, downscale, expansion, causal, block_cfg, down_cfg,
-                 add_attention_cfg=None):
+                 add_attention_cfg=None, **kwargs):
         super().__init__()
 
         if add_attention_cfg is None:
@@ -71,7 +75,9 @@ class ConvStageDown(nn.Module):  # stack of convolutional blocks --> downsamplin
             # block_cfg:
             # dilation, kernel_size=3, activation="relu", dropout=0.5, depthwise=False, init_method='trunc_normal'
         else:
-            self.blocks = ConvAttentionStack(dim, block_cfg, **add_attention_cfg, causal=causal, num_class=None)
+            add_attention_cfg_copy = copy.deepcopy(add_attention_cfg)
+            add_attention_cfg_copy.update(kwargs)
+            self.blocks = ConvAttentionStack(dim, block_cfg, **add_attention_cfg_copy, causal=causal, num_class=None)
             # add_attention_cfg:
             # attn_cfg, mlp_cfg, conv_attn_block_cfg, max_seq_len
             # **transformer_cfg
@@ -98,7 +104,7 @@ class ConvStageDown(nn.Module):  # stack of convolutional blocks --> downsamplin
 
 class ConvStageUp(nn.Module):  # upsampling --> fusion (skip connection) --> convolutional blocks --> classifier
     def __init__(self, dim, block_count, upscale, shrinking, causal, block_cfg, up_cfg, num_class=-1,
-                 weighted_fusion=False, fusion_weight_initial_value=1.0, add_attention_cfg=None):
+                 weighted_fusion=False, fusion_weight_initial_value=1.0, add_attention_cfg=None, **kwargs):
         super().__init__()
         # dim: *after* upsampling
 
@@ -122,13 +128,15 @@ class ConvStageUp(nn.Module):  # upsampling --> fusion (skip connection) --> con
 
             if num_class > 0:
                 self.head = nn.Sequential(
-                    MyLayerNorm(dim) if up_cfg['normalize'] is True else nn.Identity(),  # TODO: configure properly
+                    MyLayerNorm(dim) if up_cfg.get('normalize', True) is True else nn.Identity(),  # TODO: configure properly
                     MyLinear(dim, dim_out=num_class, init_method=block_cfg['init_method'], followed_by_relu=False)
                 )
             else:
                 self.head = None
         else:
-            self.blocks = ConvAttentionStack(dim, block_cfg, **add_attention_cfg, causal=causal,
+            add_attention_cfg_copy = copy.deepcopy(add_attention_cfg)
+            add_attention_cfg_copy.update(kwargs)
+            self.blocks = ConvAttentionStack(dim, block_cfg, **add_attention_cfg_copy, causal=causal,
                                              num_class=None if num_class <= 0 else num_class)
             # add_attention_cfg:
             # attn_cfg, mlp_cfg, conv_attn_block_cfg, max_seq_len
@@ -148,6 +156,14 @@ class ConvStageUp(nn.Module):  # upsampling --> fusion (skip connection) --> con
 
         x, _ = self.up((x, mask))
         if inp is not None:  # skip connection
+            # Ensure sequence lengths match before fusion by padding x to match inp if needed
+            if x.shape[1] != inp.shape[1]:
+                if x.shape[1] < inp.shape[1]:
+                    pad_len = inp.shape[1] - x.shape[1]
+                    x = F.pad(x, (0, 0, 0, pad_len))
+                else:
+                    x = x[:, :inp.shape[1], :]
+
             if self.weighted_fusion is True:
                 t = torch.clamp(self.t, min=0, max=2)  # -1 <= (1 - t) <= 1
             else:
@@ -172,7 +188,7 @@ class ConvStageUp(nn.Module):  # upsampling --> fusion (skip connection) --> con
 class ConvAttentionBlock(nn.Module):  # convolution --> self-attention --> mlp
     def __init__(self, dim, conv_block_cfg, attn_cfg, mlp_cfg, max_seq_len, causal=True, skip_conv=False,
                  skip_attn=False, attn_dilated=True, dilation_factor=1, normalize=True, residual_dropout=0.,
-                 sinusoidal_pe=None):
+                 sinusoidal_pe=None, **kwargs):
         super().__init__()
 
         self.pe = sinusoidal_pe  # if not None, use sinusoidal positional encoding
@@ -352,7 +368,7 @@ class ConvAttentionStack(nn.Module):  # blocks with convolutional attention --> 
                 local_mask = create_local_mask(max_seq_len, local_attn_window_size)
                 self.register_buffer('local_mask', local_mask, persistent=False)
 
-        self.attn_relative = attn_cfg['relative_position_bias']
+        self.attn_relative = attn_cfg.get('relative_position_bias', False)
         if self.attn_relative is True:
             rel_pos_indices = create_relative_position_index(max_seq_len, causal=causal)
             self.register_buffer('rel_pos_indices', rel_pos_indices, persistent=False)
@@ -463,6 +479,49 @@ class ConvAttentionStack(nn.Module):  # blocks with convolutional attention --> 
 
 
 class MyModel(nn.Module, ModelTemplate):  # TUNeS
+    @staticmethod
+    def _normalize_attn_cfg(attn_cfg):
+        cfg = copy.deepcopy(attn_cfg) if attn_cfg is not None else {}
+
+        # Accept common aliases used in external configs.
+        if 'num_heads' in cfg and 'nheads' not in cfg:
+            cfg['nheads'] = cfg.pop('num_heads')
+        if 'n_heads' in cfg and 'nheads' not in cfg:
+            cfg['nheads'] = cfg.pop('n_heads')
+        if 'dropout' in cfg and 'attn_dropout' not in cfg:
+            cfg['attn_dropout'] = cfg.pop('dropout')
+        if 'attention_dropout' in cfg and 'attn_dropout' not in cfg:
+            cfg['attn_dropout'] = cfg.pop('attention_dropout')
+        if 'use_bias' in cfg and 'proj_bias' not in cfg:
+            cfg['proj_bias'] = cfg.pop('use_bias')
+
+        # head_dim is not a direct MyAttention argument; convert to attn_dim.
+        if 'head_dim' in cfg and 'attn_dim' not in cfg:
+            head_dim = cfg.pop('head_dim')
+            nheads = cfg.get('nheads', 4)
+            cfg['attn_dim'] = int(head_dim) * int(nheads)
+
+        # Keep only parameters accepted by MyAttention.
+        allowed = {
+            'in_dim', 'attn_dim', 'dim_expansion', 'nheads', 'relative_position_bias',
+            'causal', 'attn_dropout', 'max_len', 'proj_bias', 'init_method'
+        }
+        return {k: v for k, v in cfg.items() if k in allowed}
+
+    @staticmethod
+    def _normalize_mlp_cfg(mlp_cfg):
+        cfg = copy.deepcopy(mlp_cfg) if mlp_cfg is not None else {}
+
+        # Accept aliases from YAML defaults.
+        if 'expansion' in cfg and 'dim_expansion' not in cfg:
+            cfg['dim_expansion'] = cfg.pop('expansion')
+
+        cfg.setdefault('dim_expansion', 4)
+        cfg.setdefault('activation', 'relu')
+        cfg.setdefault('dropout', 0.0)
+
+        return cfg
+
     def __init__(self, d_in, num_class, causal_model,
                  down_up_cfg, conv_block_cfg, attn_cfg, mlp_cfg, conv_attn_block_cfg, transformer_cfg, max_seq_len,
                  d_model=64, transformer_add_tokens=True,
@@ -477,6 +536,10 @@ class MyModel(nn.Module, ModelTemplate):  # TUNeS
         assert (len(temporal_scales) == len(down_blocks) and len(channel_scales) == len(down_blocks))
         for list_ in [up_kernels, up_dilations]:
             assert (len(list_) == 0 or len(list_) == len(up_blocks))
+
+        # Normalize config aliases once to avoid downstream constructor mismatches.
+        attn_cfg = self._normalize_attn_cfg(attn_cfg)
+        mlp_cfg = self._normalize_mlp_cfg(mlp_cfg)
 
         # Multi-token input configuration
         self.input_format = input_format
@@ -547,10 +610,15 @@ class MyModel(nn.Module, ModelTemplate):  # TUNeS
         i = 0
         while i < len(down_blocks):
             if stage_ctr == attention_idx:  # use convolutional attention stack at this stage
-                attention_cfg['max_seq_len'] = int(math.ceil(max_seq_len / self.temporal_scales[i]) * 2)
+                attn_cfg_copy = copy.deepcopy(attention_cfg)
+                attn_cfg_copy.pop("max_seq_len", None)
+                if "num_layers" in attn_cfg_copy:
+                    attn_cfg_copy["nlayers"] = attn_cfg_copy.pop("num_layers")
                 self.down_path.append(ConvStageDown(
                     dim_, down_blocks[i], temporal_scales[i], channel_scales[i], self.causal,
-                    copy.deepcopy(conv_block_cfg), copy.deepcopy(down_up_cfg), add_attention_cfg=attention_cfg
+                    copy.deepcopy(conv_block_cfg), copy.deepcopy(down_up_cfg), 
+                    add_attention_cfg=attn_cfg_copy,
+                    max_seq_len=int(math.ceil(max_seq_len / self.temporal_scales[i]) * 2)
                 ))
             else:
                 self.down_path.append(ConvStageDown(
@@ -572,6 +640,15 @@ class MyModel(nn.Module, ModelTemplate):  # TUNeS
         else:
             conv_attn_block_cfg_ = conv_attn_block_cfg
             transformer_cfg_ = transformer_cfg
+        
+        # Ensure max_seq_len is not duplicated in transformer_cfg_
+        transformer_cfg_ = copy.deepcopy(transformer_cfg_)
+        transformer_cfg_.pop("max_seq_len", None)
+        
+        # Unify nlayers/num_layers to avoid duplicate parameter error
+        if "num_layers" in transformer_cfg_:
+            transformer_cfg_["nlayers"] = transformer_cfg_.pop("num_layers")
+
         self.bottleneck = ConvAttentionStack(
             dim_, conv_block_cfg, attn_cfg, mlp_cfg, conv_attn_block_cfg_,
             max_seq_len=int(math.ceil(max_seq_len / self.temporal_scales[-1]) * 2),
@@ -598,13 +675,17 @@ class MyModel(nn.Module, ModelTemplate):  # TUNeS
             if len(up_dilations) > 0:
                 conv_block_cfg['dilation'] = up_dilations[i]
             if stage_ctr == attention_idx:  # use convolutional attention stack at this stage
-                attention_cfg['max_seq_len'] = int(math.ceil(max_seq_len / self.temporal_scales[-(i + 2)]) * 2)
+                attn_cfg_copy = copy.deepcopy(attention_cfg)
+                attn_cfg_copy.pop("max_seq_len", None)
+                if "num_layers" in attn_cfg_copy:
+                    attn_cfg_copy["nlayers"] = attn_cfg_copy.pop("num_layers")
                 self.up_path.append(ConvStageUp(
                     dim_ // channel_scales[-(i + 1)], up_blocks[i], temporal_scales[-(i + 1)], channel_scales[-(i + 1)],
                     self.causal, copy.deepcopy(conv_block_cfg), copy.deepcopy(down_up_cfg),
                     num_class=num_class, weighted_fusion=weighted_fusion, fusion_weight_initial_value=fusion_weight_init,
-                    add_attention_cfg=attention_cfg)
-                )
+                    add_attention_cfg=attn_cfg_copy,
+                    max_seq_len=int(math.ceil(max_seq_len / self.temporal_scales[-(i + 2)]) * 2)
+                ))
             else:
                 self.up_path.append(ConvStageUp(
                     dim_ // channel_scales[-(i + 1)], up_blocks[i], temporal_scales[-(i + 1)], channel_scales[-(i + 1)],
@@ -646,6 +727,9 @@ class MyModel(nn.Module, ModelTemplate):  # TUNeS
         i = 0
         for down in self.down_path:
             (x, mask), interm = down(x, mask)
+            # Ensure mask matches pooled length exactly to avoid indexing errors
+            if mask.shape[1] != x.shape[1]:
+                mask = mask[:, :x.shape[1]]
             intermediates.append(interm)
             i += 1
 
@@ -669,6 +753,10 @@ class MyModel(nn.Module, ModelTemplate):  # TUNeS
         outputs = tuple()
         for up in self.up_path:
             interm, mask_high_res = intermediates.pop()
+            # Ensure mask_high_res matches interm sequence length exactly
+            if mask_high_res is not None and mask_high_res.shape[1] != interm.shape[1]:
+                mask_high_res = mask_high_res[:, :interm.shape[1]]
+                
             up_out = up(x, mask, mask_high_res, inp=interm if self.use_skip_connections is True else None)
             x, mask = up_out[FEATURES]
             outputs += (up_out[LOGITS], )
@@ -765,215 +853,3 @@ class MyModel(nn.Module, ModelTemplate):  # TUNeS
 
         return results
 
-
-class MyTrainer(TrainerTemplate):
-    def __init__(self, deep_supervision, phase_recognition_loss, smooth_logits_loss, multilabel_loss,
-                 phase_recognition_factor, smooth_logits_factor, smoothing_loss_max_scale,
-                 multi_label_factor, bottleneck_unmasked_factor, bottleneck_masked_factor, model_scales, mask_prob,
-                 device_cpu, device_gpu, nplot=4, dataset=Cholec80):
-        super().__init__(deep_supervision, phase_recognition_loss, smooth_logits_loss,
-                         phase_recognition_factor, smooth_logits_factor, device_cpu, device_gpu, nplot, dataset)
-
-        self.loss_functions["multi_label"] = multilabel_loss
-
-        self.loss_factors["multi_label"] = multi_label_factor
-        self.loss_factors["bottleneck_unmasked"] = bottleneck_unmasked_factor
-        self.loss_factors["bottleneck_masked"] = bottleneck_masked_factor
-
-        for j in range(len(model_scales) - 1):
-            self.loss_keys.append("loss_multi_label_s-{}".format(model_scales[j]))
-        self.loss_keys.append("loss_bottleneck_unmasked")
-        if mask_prob > 0:
-            self.loss_keys.append("loss_bottleneck_masked")
-
-        self.smoothing_loss_max_scale = smoothing_loss_max_scale
-
-    def process_batch(self, model, batch, train=True):
-        input, in_valid_mask, token_mask_in, token_mask_out, \
-        target, multi_scale_targets, multi_scale_valid_masks, bottleneck_target, bottleneck_valid_mask, \
-        nelems, N, S, results = model.parse_batch(
-            batch, self.device_gpu, train, get_target=True, deep_supervision=self.deep_supervision
-        )
-
-        out = model(input, in_valid_mask, token_mask_in)
-
-        self.process_(
-            out, in_valid_mask, token_mask_in, token_mask_out,
-            target, multi_scale_targets, multi_scale_valid_masks, bottleneck_target, bottleneck_valid_mask,
-            nelems, N, results, train
-        )
-
-        return results
-
-    def process_(self, out, in_valid_mask, token_mask_in, token_mask_out,
-                 target, multi_scale_targets, multi_scale_valid_masks, bottleneck_target, bottleneck_valid_mask,
-                 nelems, N, results, train):
-        if ATTENTION_WEIGHTS in out:
-            results["attn_weights_gpu"] = [
-                None if attn_weights is None else attn_weights.detach() for attn_weights in out[ATTENTION_WEIGHTS]
-            ]
-
-        total_loss, loss_factor_sum = self.compute_multiscale_phase_recognition_loss(
-            out[LOGITS], in_valid_mask, target, multi_scale_targets, multi_scale_valid_masks, nelems, N, train, results
-        )
-
-        b_loss, b_loss_factor_sum = self.compute_bottleneck_reconstruction_loss(
-            out[BOTTLENECK_LOGITS], bottleneck_valid_mask, bottleneck_target, token_mask_in, token_mask_out, results
-        )
-        total_loss = total_loss + b_loss
-        loss_factor_sum = loss_factor_sum + b_loss_factor_sum
-
-        total_loss = total_loss / loss_factor_sum  # normalize loss factors
-
-        if train is True:
-            results["total_loss"] = total_loss
-
-    def compute_multiscale_phase_recognition_loss(
-            self, ms_logits, valid_mask, target, multi_scale_targets, multi_scale_valid_masks, nelems, N, train, results
-    ):
-        total_loss = 0
-        loss_factor_sum = 0
-
-        nlogits = len(ms_logits)
-        for i in range(0 if self.deep_supervision else (nlogits - 1), nlogits):
-            logits = ms_logits[i]
-
-            logits_chF = logits.permute(0, 2, 1)  # N x S x C --> N x C x S; channels first format
-            logits_chL = logits
-            del logits
-
-            scale = int(target.shape[1] // logits_chF.shape[-1])
-            if scale == 1:
-                loss_ = self.loss_functions["phase_recognition"](logits_chF, target) \
-                        * self.loss_factors["phase_recognition"]
-                total_loss = total_loss + loss_
-                loss_factor_sum += self.loss_factors["phase_recognition"]
-            else:
-                target_scaled = multi_scale_targets[scale]
-                valid_mask_scaled = multi_scale_valid_masks[scale]
-
-                loss_ = self.loss_functions["multi_label"](logits_chL, target_scaled.float(), valid_mask_scaled) \
-                        * self.loss_factors["multi_label"]
-                total_loss = total_loss + loss_
-                loss_factor_sum += self.loss_factors["multi_label"]
-                results["loss_multi_label_s-{}".format(scale)] = (loss_.item(), valid_mask_scaled.sum().item())
-
-            if i == (nlogits - 1):
-                assert (scale == 1)
-                results["loss_phase_recognition"] = (loss_.item(), nelems)
-
-            if self.loss_factors["smooth_logits"] > 0 and \
-                    (self.smoothing_loss_max_scale < 0 or scale <= self.smoothing_loss_max_scale):
-                if scale == 1:
-                    valid_mask_scaled = valid_mask
-                else:
-                    valid_mask_scaled = multi_scale_valid_masks[scale]
-                loss_ = self.loss_functions["smooth_logits"](logits_chL, valid_mask_scaled) \
-                        * self.loss_factors["smooth_logits"]
-                total_loss = total_loss + loss_
-                loss_factor_sum += self.loss_factors["smooth_logits"]
-                if i == (nlogits - 1):
-                    results["loss_smooth"] = (loss_.item(), nelems - N)
-
-        # logits_chF = out[LOGITS][-1].permute(0, 2, 1)
-        self.get_prediction(logits_chF, valid_mask, target, results, nelems, train)
-
-        return total_loss, loss_factor_sum
-
-    def compute_bottleneck_reconstruction_loss(
-            self, logits, valid_mask, target, token_mask_in, token_mask_out, results
-    ):
-        # logits shape: # N x bottleneck_len x C
-
-        total_loss = 0
-        loss_factor_sum = 0
-
-        # loss on unmasked positions
-        if token_mask_in is not None:
-            loss_mask = torch.logical_and(torch.logical_not(token_mask_out), valid_mask)  # unmasked & valid positions
-        else:
-            loss_mask = valid_mask
-        loss_ = self.loss_functions["multi_label"](logits, target.float(), loss_mask) \
-                * self.loss_factors["bottleneck_unmasked"]
-        total_loss = total_loss + loss_
-        loss_factor_sum += self.loss_factors["bottleneck_unmasked"]
-        results["loss_bottleneck_unmasked"] = (loss_.item(), loss_mask.sum().item())
-
-        # loss on masked positions
-        if token_mask_in is not None:
-            loss_mask = torch.logical_and(token_mask_out, valid_mask)  # masked & valid positions
-            if loss_mask.sum() > 0:
-                loss_ = self.loss_functions["multi_label"](logits, target.float(), loss_mask) \
-                        * self.loss_factors["bottleneck_masked"]
-                total_loss = total_loss + loss_
-                loss_factor_sum += self.loss_factors["bottleneck_masked"]
-                results["loss_bottleneck_masked"] = (loss_.item(), loss_mask.sum().item())
-
-        with torch.no_grad():
-            probs = torch.sigmoid(logits) * valid_mask.unsqueeze(-1)
-            results["bottleneck_probs_gpu"] = probs.detach()
-
-        return total_loss, loss_factor_sum
-
-    def reset(self, train=False):
-        if train is True:
-            self.predictions = []
-        else:
-            self.predictions = {}
-
-    def update_predictions(self, results, train=True):
-        if train is True:
-            if len(self.predictions) < self.nplot:
-                bottleneck_out = results["bottleneck_probs_gpu"].to(self.device_cpu).numpy()
-                bottleneck_target = results["bottleneck_target_cpu"].numpy()
-                if "bottleneck_mask_cpu" in results:
-                    bottleneck_mask = results["bottleneck_mask_cpu"].float().numpy()
-                else:
-                    bottleneck_mask = None
-                attn_weights = [None if attn is None else attn.to(self.device_cpu).numpy() for attn in results["attn_weights_gpu"]]
-
-                for i in range(results["batch_size"]):
-                    if len(self.predictions) < self.nplot:
-                        self.predictions.append({
-                            "bottleneck_probs": bottleneck_out[i],
-                            "bottleneck_target": bottleneck_target[i],
-                            "bottleneck_mask": None if bottleneck_mask is None else bottleneck_mask[i],
-                            "attn_weights": [None if attn is None else attn[i] for attn in attn_weights]
-                        })
-        else:
-            predicted = results["predicted_gpu"].to(self.device_cpu).numpy()
-            target = results["target_cpu"].numpy()
-            valid_mask = results["in_valid_mask_cpu"].numpy()
-            bottleneck_out = results["bottleneck_probs_gpu"].to(self.device_cpu).numpy()
-            attn_weights = [None if attn is None else attn.to(self.device_cpu).numpy() for attn in results["attn_weights_gpu"]]
-
-            for i in range(results["batch_size"]):
-                P = predicted[i, valid_mask[i, :]]
-                Y = target[i, valid_mask[i, :]]
-
-                metrics = calculate_metrics(Y, P, self.dataset.phase_labels)
-                key_ = ("{:.4f}".format(metrics["accuracy"]), "{:.4f}".format(metrics["macro_jaccard"]))
-                self.predictions[key_] = {
-                    'predicted': P,
-                    'target': Y,
-                    'bottleneck_probs': bottleneck_out[i],
-                    'attn_weights': [None if attn is None else attn[i] for attn in attn_weights]
-                }
-
-    def visualize_outputs(self, epoch, logger, logger_prefix=None, train=True):
-        if train is True:
-            logger_prefix = "train"
-            logger.add_figure("{}/bottleneck_probs".format(logger_prefix),
-                              visualize_masked_bottleneck_outputs(self.predictions, self.dataset.num_phases), epoch)
-            logger.add_figure("{}/attention".format(logger_prefix),
-                              visualize_attention_weights(self.predictions), epoch)
-        else:
-            assert (logger_prefix is not None)
-            achieved_metrics = sorted(sorted(list(self.predictions.keys()), key=lambda t: t[0]), key=lambda t: t[1])
-            if len(achieved_metrics) > 0:
-                # show results with lowest performance
-                to_plot = [self.predictions[key_] for key_ in achieved_metrics[:self.nplot]]
-                logger.add_figure("{}/predictions".format(logger_prefix), visualize_predictions(to_plot, self.dataset.num_phases), epoch)
-                logger.add_figure("{}/bottleneck_probs".format(logger_prefix),
-                                  visualize_bottleneck_outputs(to_plot, self.dataset.num_phases), epoch)
-                logger.add_figure("{}/attention".format(logger_prefix), visualize_attention_weights(to_plot), epoch)

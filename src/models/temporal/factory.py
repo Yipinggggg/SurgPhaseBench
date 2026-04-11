@@ -19,6 +19,7 @@ _REGISTRY: dict[str, tuple[str, str, str]] = {
     "mamba_multistage": ("TemporalModel.MaTransformer.mamba_model", "MultiStageMambaModel", "NCT"),
     "trans_svnet":      ("TemporalModel.TransSVNet.trans_svnet", "TransSVNetModel", "NTC"),
     "tut":              ("TemporalModel.TUT.models.TUT", "TUT", "NCT"),
+    "mstunes":          ("TemporalModel.tunes.ms_tunes", "MsTUNeS", "NTC"),
 }
 
 
@@ -220,6 +221,65 @@ def _construct(key: str, Cls, feature_dim: int, num_classes: int, max_seq_len: i
             input_dropout=kw.get("input_dropout", 0.4),
             rpe_use=kw.get("rpe_use", True),
             rpe_share=kw.get("rpe_share", True),
+        )
+
+    elif key == "mstunes":
+        # Align with my_opts.py defaults and structure
+        conv_block_cfg = kw.get("conv_block_cfg", {
+            "kernel_size": kw.get("conv_kernel", 3),
+            "activation": kw.get("conv_activation", "gelu"),
+            "dropout": kw.get("conv_dropout", 0.0),
+            "init_method": kw.get("conv_init", "default"),
+        })
+        attn_cfg = kw.get("attn_cfg", {
+            "dim_expansion": kw.get("attn_expansion", 4),
+            "nheads": kw.get("attn_nhead", 4),
+            "attn_dropout": kw.get("attn_dropout", 0.0),
+            "proj_bias": kw.get("attn_proj_bias", False),
+            "relative_position_bias": kw.get("attn_relative", False),
+            "init_method": kw.get("transformer_init", "default"),
+        })
+        mlp_cfg = kw.get("mlp_cfg", {
+            "dim_expansion": kw.get("ff_expansion", 1),
+            "activation": kw.get("ff_activation", "gelu"),
+            "dropout": kw.get("ff_dropout", 0.0),
+        })
+        transformer_cfg = kw.get("transformer_cfg", {
+            "nlayers": kw.get("transformer_nlayers", 2),
+            "normalize": kw.get("transformer_normalize", False),
+            "init_method": kw.get("transformer_init", "default"),
+            "residual_dropout": kw.get("transformer_residual_dropout", 0.0),
+            "use_sinusoidal_pe": kw.get("sinusoidal_pe", False),
+        })
+        conv_attn_block_cfg = kw.get("conv_attn_block_cfg", {
+            "skip_conv": kw.get("skip_conv", False),
+            "skip_attn": kw.get("skip_attn", False),
+        })
+
+        return Cls(
+            d_in=feature_dim,
+            num_class=num_classes,
+            causal_model=kw.get("causal", True),
+            down_up_cfg=kw.get("down_up_cfg", {}),
+            conv_block_cfg=conv_block_cfg,
+            attn_cfg=attn_cfg,
+            mlp_cfg=mlp_cfg,
+            conv_attn_block_cfg=conv_attn_block_cfg,
+            transformer_cfg=transformer_cfg,
+            max_seq_len=max_seq_len,
+            num_stages=kw.get("num_stages", 2),
+            d_model=kw.get("d_model", 64),
+            transformer_add_tokens=kw.get("transformer_add_tokens", True),
+            down_blocks=kw.get("down_blocks", [2, 2, 2]),
+            up_blocks=kw.get("up_blocks", [2, 2, 2]),
+            temporal_scales=kw.get("temporal_scales", [3, 3, 2]),
+            channel_scales=kw.get("channel_scales", [1, 1, 1]),
+            up_kernels=kw.get("up_kernels", []),
+            up_dilations=kw.get("up_dilations", []),
+            skip_connections=kw.get("skip_connections", True),
+            weighted_fusion=kw.get("weighted_fusion", True),
+            fusion_weight_init=kw.get("fusion_weight_init", 1.0),
+            forward_features=kw.get("forward_features", False),
         )
 
     raise ValueError(f"No constructor defined for {key!r}")

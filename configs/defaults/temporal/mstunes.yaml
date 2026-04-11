@@ -1,0 +1,43 @@
+model:
+  name: mstunes
+  num_stages: 2
+  d_model: 64
+  causal: true
+  transformer_add_tokens: true
+  down_blocks: [2, 2, 2]
+  up_blocks: [2, 2, 2]
+  temporal_scales: [2, 2, 2]
+  channel_scales: [2, 2, 2]
+  skip_connections: true
+  weighted_fusion: false
+  fusion_weight_init: 1.0
+  forward_features: false
+  
+  # Configuration for internal blocks (based on typical TUNeS config)
+  down_up_cfg:
+    depthwise: false
+  conv_block_cfg:
+    dilation: 1
+    kernel_size: 3
+    activation: "relu"
+    dropout: 0.5
+    depthwise: false
+    init_method: 'trunc_normal'
+  attn_cfg:
+    num_heads: 8
+    head_dim: 8
+    dropout: 0.1
+    use_bias: true
+    relative_position_bias: false
+    init_method: 'trunc_normal'
+  mlp_cfg:
+    expansion: 4
+    activation: "gelu"
+    dropout: 0.1
+    init_method: 'trunc_normal'
+  conv_attn_block_cfg:
+    normalize: true
+    init_method: 'trunc_normal'
+  transformer_cfg:
+    nlayers: 2
+    max_seq_len: 12000

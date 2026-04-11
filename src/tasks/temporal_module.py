@@ -55,7 +55,7 @@ class TemporalModule(BasePhaseModule):
         B = features.shape[0]
         if self.model_name in ("asformer", "asformer_causal", "matransformer"):
             return torch.ones(B, 1, T, dtype=torch.float32, device=features.device)
-        elif self.model_name in ("mstcn", "actionformer", "mamba", "mamba_multistage"):
+        elif self.model_name in ("mstcn", "actionformer", "mamba", "mamba_multistage", "mstunes"):
             return torch.ones(B, T, dtype=torch.bool, device=features.device)
         return None  # opera, sahc handle masks internally
 
@@ -63,12 +63,25 @@ class TemporalModule(BasePhaseModule):
         if self.model_name in ("asformer", "asformer_causal", "matransformer", "mstcn", "actionformer",
                                "mamba", "mamba_multistage"):
             out = self.model(features, mask)
+        elif self.model_name == "mstunes":
+            out = self.model(features, mask)
         else:
             out = self.model(features)
 
         # Normalise output to a list
-        if isinstance(out, dict):
+        if isinstance(out, (list, tuple)):
+            final_out = []
+            for item in out:
+                if isinstance(item, dict) and "logits" in item:
+                    final_out.append(item["logits"][-1])
+                else:
+                    final_out.append(item)
+            out = final_out
+        elif isinstance(out, dict):
             out = out.get("logits", list(out.values())[0])
+            if isinstance(out, (list, tuple)):
+                out = out[-1]
+        
         if not isinstance(out, (list, tuple)):
             out = [out]
         return list(out)
@@ -79,9 +92,10 @@ class TemporalModule(BasePhaseModule):
 
     def _build_smooth_loss(self):
         # Only used for multi-stage NCT models
-        if self.model_name in ("mstcn", "asformer", "asformer_causal", "matransformer", "mamba_multistage"):
+        if self.model_name in ("mstcn", "asformer", "asformer_causal", "matransformer", "mamba_multistage", "mstunes"):
             from TemporalModel.loss import TruncatedMSELoss
-            self.smooth_loss_fn = TruncatedMSELoss(clamp_max=4, reduction="mean", channels_last=False)
+            channels_last = (self.input_format == "NTC")
+            self.smooth_loss_fn = TruncatedMSELoss(clamp_max=4, reduction="mean", channels_last=channels_last)
             # get weight from config, default to 0.15 as in MS-TCN paper
             self.smoothing_weight = float(self.cfg["model"].get("smoothing_weight", 0.15))
         else:
