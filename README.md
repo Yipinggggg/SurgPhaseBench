@@ -17,7 +17,7 @@ The current implementation is based on PyTorch Lightning and supports experiment
 | [ASFormer](https://arxiv.org/pdf/2110.08568) | Two-stage / temporal | Transformer | Transformer-based temporal modeling |
 | [Causal-Transformer](https://arxiv.org/abs/2412.04039) | Two-stage / temporal | Transformer | Causal Implementation of ASFormer - transformer-based temporal modelling |
 | [OperA](https://arxiv.org/pdf/2103.03873) | Two-stage / temporal | Transformer | Causal Transformer Temporal modelling |
-| [TUNeS](https://arxiv.org/pdf/2307.09997) | Two-stage / temporal | Transformer | U-Net like temporal modelling; current implementation requires further verification|
+| [TUNeS](https://arxiv.org/pdf/2307.09997) | Two-stage / temporal | Convolution + Transformer | U-Net like temporal modelling; current implementation requires further verification|
 
 More incoming!
 
