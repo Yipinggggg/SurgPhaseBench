@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch.utils.data import ConcatDataset, DataLoader
 import pytorch_lightning as pl
-from src.data.datamodules.base_datamodule import build_base_datasets
+from src.data.datamodules.base_datamodule import build_base_datasets, print_dataset_summary
 
 class FrameDataModule(pl.LightningDataModule):
     def __init__(self, cfg: dict):
@@ -18,16 +18,7 @@ class FrameDataModule(pl.LightningDataModule):
         self.val_ds = ConcatDataset(val_sets) if val_sets else None
         self.test_ds = ConcatDataset(test_sets) if test_sets else None
 
-        # Print dataset info
-        print("\n" + "="*50)
-        print(f"Loaded FrameDataModule (batch_size={self.batch_size})")
-        for name, ds_list, ds_concat in [("Train", train_sets, self.train_ds), 
-                                         ("Val", val_sets, self.val_ds), 
-                                         ("Test", test_sets, self.test_ds)]:
-            num_vids = len(ds_list) if ds_list else 0
-            num_imgs = len(ds_concat) if ds_concat else 0
-            print(f"  {name:5s}: {num_vids:3d} videos, {num_imgs:7d} images")
-        print("="*50 + "\n")
+        print_dataset_summary(train_sets, val_sets, test_sets, "FrameDataModule (Stage 1 - Frame-Level Encoder)")
 
     def train_dataloader(self):
         if not self.train_ds or len(self.train_ds) == 0:

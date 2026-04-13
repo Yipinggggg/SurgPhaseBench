@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch.utils.data import ConcatDataset, DataLoader
 import pytorch_lightning as pl
-from src.data.datamodules.base_datamodule import build_base_datasets
+from src.data.datamodules.base_datamodule import build_base_datasets, print_dataset_summary
 
 def _collate_video_sequences(batch: list[dict]) -> dict:
     max_len = max(item["frames"].shape[0] for item in batch)
@@ -56,21 +56,13 @@ class EndToEndSequenceDataModule(pl.LightningDataModule):
         self.val_ds = ConcatDataset(val_sets) if val_sets else None
         self.test_ds = ConcatDataset(test_sets) if test_sets else None
 
-        # Print dataset info
-        batch_sz = self.cfg.get("batch_size", 1)
-        print("\n" + "="*50)
-        print(
-            f"Loaded EndToEndSequenceDataModule (batch_size={batch_sz}, "
-            f"seq_len={self.seq_len}, seq_stride={self.seq_stride})"
-        )
-        for name, ds_list, ds_concat in [("Train", train_sets, self.train_ds),
-                                         ("Val",   val_sets, self.val_ds),
-                                         ("Test",  test_sets, self.test_ds)]:
-            num_vids = len(ds_list) if ds_list else 0
-            num_imgs = sum(len(ds) for ds in ds_list) if ds_list else 0
-            num_seq = len(ds_concat) if ds_concat is not None else 0
-            print(f"  {name:5s}: {num_vids:3d} videos, {num_imgs:8d} images total, {num_seq:6d} sequences")
-        print("="*50 + "\n")
+        extra_info = {
+            "batch_size": self.cfg.get("batch_size", 1),
+            "seq_len": self.seq_len,
+            "seq_stride": self.seq_stride,
+        }
+        print_dataset_summary(train_sets, val_sets, test_sets, 
+                            "EndToEndSequenceDataModule", extra_info)
 
     def train_dataloader(self):
         return DataLoader(self.train_ds, batch_size=self.batch_size, shuffle=self.shuffle_train,

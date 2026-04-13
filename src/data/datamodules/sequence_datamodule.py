@@ -15,6 +15,7 @@ from typing import Optional
 import torch
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
+from src.data.datamodules.base_datamodule import print_dataset_summary
 
 AMBIGUOUS = object()
 
@@ -197,15 +198,16 @@ class SequenceDataModule(pl.LightningDataModule):
         if stage in ("test", None):
             self.test_ds  = self._make_dataset("test")
 
-        counts = []
-        for name, ds in [
-            ("train", getattr(self, "train_ds", None)),
-            ("val", getattr(self, "val_ds", None)),
-            ("test", getattr(self, "test_ds", None)),
-        ]:
-            if ds is not None:
-                counts.append(f"{name}={len(ds)}")
-        print("Loaded videos: " + ", ".join(counts))
+        # Print dataset summary - wrap video_ids for printing
+        class VideoListWrapper:
+            def __init__(self, video_ids):
+                self.video_ids = video_ids
+        
+        train_wrapper = [VideoListWrapper(self.train_ds.video_ids)] if hasattr(self, "train_ds") and self.train_ds else []
+        val_wrapper = [VideoListWrapper(self.val_ds.video_ids)] if hasattr(self, "val_ds") and self.val_ds else []
+        test_wrapper = [VideoListWrapper(self.test_ds.video_ids)] if hasattr(self, "test_ds") and self.test_ds else []
+        
+        print_dataset_summary(train_wrapper, val_wrapper, test_wrapper, "SequenceDataModule (Stage 3 - Temporal)")
 
     def _loader(self, dataset: Dataset, shuffle: bool) -> DataLoader:
         return DataLoader(

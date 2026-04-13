@@ -6,7 +6,7 @@ import torch
 from pathlib import Path
 from torch.utils.data import DataLoader, Dataset, ConcatDataset
 import pytorch_lightning as pl
-from src.data.datamodules.base_datamodule import build_base_datasets
+from src.data.datamodules.base_datamodule import build_base_datasets, print_dataset_summary
 
 def _collate_tmrnet(batch: list[dict]) -> dict:
     """Collate frames, labels, and the global memory bank context."""
@@ -151,9 +151,20 @@ class TMRNetDataModule(pl.LightningDataModule):
 
         train, val, test = build_base_datasets(cfg_for_base, mode="sequence")
 
-        self.train_ds = ConcatDataset(self._wrap_datasets(train, split="train")) if train else None
-        self.val_ds = ConcatDataset(self._wrap_datasets(val, split="val")) if val else None
-        self.test_ds = ConcatDataset(self._wrap_datasets(test, split="test")) if test else None
+        train_wrapped = self._wrap_datasets(train, split="train") if train else None
+        val_wrapped = self._wrap_datasets(val, split="val") if val else None
+        test_wrapped = self._wrap_datasets(test, split="test") if test else None
+        
+        self.train_ds = ConcatDataset(train_wrapped) if train_wrapped else None
+        self.val_ds = ConcatDataset(val_wrapped) if val_wrapped else None
+        self.test_ds = ConcatDataset(test_wrapped) if test_wrapped else None
+
+        extra_info = {
+            "batch_size": self.train_batch_size,
+            "memory_window": self.memory_window,
+        }
+        print_dataset_summary(train_wrapped or [], val_wrapped or [], test_wrapped or [], 
+                            "TMRNetDataModule", extra_info)
 
     def train_dataloader(self):
         return DataLoader(self.train_ds, batch_size=self.train_batch_size, shuffle=self.shuffle_train,

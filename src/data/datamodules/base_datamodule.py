@@ -87,6 +87,47 @@ class VideoDatasetWrapper(Dataset):
             "labels": torch.as_tensor(labels, dtype=torch.long)
         }
 
+def print_dataset_summary(train_sets, val_sets, test_sets, title: str = "DataModule", extra_info: dict = None):
+    """
+    Print train/val/test dataset summary with video names.
+    
+    Args:
+        train_sets: list of datasets with .video_id or .video_ids attributes
+        val_sets: list of datasets with .video_id or .video_ids attributes
+        test_sets: list of datasets with .video_id or .video_ids attributes
+        title: name of the datamodule
+        extra_info: dict of extra parameters to display (e.g., batch_size, seq_len)
+    """
+    def _get_video_ids(ds):
+        """Extract video_ids from a dataset wrapper."""
+        if hasattr(ds, "video_ids"):
+            return ds.video_ids
+        elif hasattr(ds, "video_id"):
+            return [ds.video_id]
+        else:
+            return []
+    
+    print("\n" + "="*70)
+    info_str = title
+    if extra_info:
+        params = ", ".join(f"{k}={v}" for k, v in extra_info.items())
+        info_str += f" ({params})"
+    print(info_str)
+    
+    for split_name, ds_list in [("TRAIN", train_sets), ("VAL", val_sets), ("TEST", test_sets)]:
+        if ds_list:
+            video_ids = []
+            for ds in ds_list:
+                video_ids.extend(_get_video_ids(ds))
+            
+            print(f"  {split_name} ({len(video_ids)} videos):")
+            for i, vid in enumerate(video_ids, 1):
+                print(f"    {i:3d}. {vid}")
+        else:
+            print(f"  {split_name}: (not loaded)")
+    print("="*70 + "\n")
+
+
 def build_base_datasets(cfg_data, mode="frame"):
     """Common logic for building legacy datasets via prepare_dataset."""
     opts = SimpleNamespace(
