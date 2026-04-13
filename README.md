@@ -19,6 +19,8 @@ The current implementation is based on PyTorch Lightning and supports experiment
 | [OperA](https://arxiv.org/pdf/2103.03873) | Two-stage / temporal | Transformer | Causal Transformer Temporal modelling |
 | [TUNeS](https://arxiv.org/pdf/2307.09997) | Two-stage / temporal | Transformer | U-Net like temporal modelling; current implementation requires further verification|
 
+More incoming!
+
 ### Feature Encoder
 
 The feature encoder supports both **Torchvision** and **Hugging Face** models with minimal modifications. In addition, several pretrained models are integrated, including:
@@ -28,15 +30,17 @@ The feature encoder supports both **Torchvision** and **Hugging Face** models wi
 - [SurgeNet-DINO](https://github.com/rlpddejong/SurgeNetDINO)  
 - [EndoFM](https://github.com/med-air/Endo-FM)  
 
-
 ## Evaluation
 We follow established evaluation practices for surgical phase recognition. The current implementation is largely based on:
+
+```bibtex
 @article{funke2023metrics,
   title={Metrics matter in surgical phase recognition},
   author={Funke, Isabel and Rivoir, Dominik and Speidel, Stefanie},
   journal={arXiv preprint arXiv:2305.13961},
   year={2023}
 }
+```
 
 ## Acknowledgements
 
