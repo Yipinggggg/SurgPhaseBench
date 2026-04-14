@@ -16,14 +16,14 @@ class TMRNetModule(BasePhaseModule):
     
     Expected batch keys:
     - "frames": (B, T, 3, H, W) - Full video sequence
-    - "memory_bank": (B, T, T_mem, C_mem) - Historical context per frame
+    - "memory_bank": (B, T_mem, C_mem) - Prebuilt memory bank features
     - "labels": (B, T) - Phase labels per frame
     """
     def __init__(self, cfg: dict):
         super().__init__(cfg)
         self.model = EndToEndTMRNet(cfg["model"])
         self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100, reduction="sum")
-        # Use dict of dicts: {base_video_id: {global_frame_idx: (gt, pred, conf)}}
+        # Use dict of dicts: {base_video_id: {global_frame_idx: list[(gt, pred, conf)]}}
         self._test_frames = None
 
     def _normalize_batch(self, batch):
@@ -122,74 +122,49 @@ class TMRNetModule(BasePhaseModule):
 
     def test_step(self, batch, batch_idx):
         frames, labels, memory_bank = self._normalize_batch(batch)
-        logits = self(frames, memory_bank)  # (B, T, C) or (B, C) depending on model
-        
-        # Handle both cases: if logits is (B, C) add a time dimension
-        if logits.ndim == 2:
-            logits = logits.unsqueeze(1)  # (B, 1, C)
-        
-        # For compatibility, expand labels to match logits shape if needed
-        if labels.shape != logits.shape[:-1]:
-            labels = labels[:, :logits.shape[1]]
-        
-        loss = self.loss_fn(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
-        preds = logits.argmax(dim=-1)  # (B, T) or (B,)
-        confs = torch.softmax(logits, dim=-1).amax(dim=-1)  # (B, T) or (B,)
-        
-        # Ensure 2D shapes
-        if preds.ndim == 1:
-            preds = preds.unsqueeze(1)
-        if labels.ndim == 1:
-            labels = labels.unsqueeze(1)
-        if confs.ndim == 1:
-            confs = confs.unsqueeze(1)
+        logits = self(frames, memory_bank)  # (B, C) for TMRNet
+
+        # TMRNet predicts one label per clip, supervised by the last frame.
+        target = labels[:, -1]
+        loss = self.loss_fn(logits, target)
+        preds = logits.argmax(dim=-1)
+        confs = torch.softmax(logits, dim=-1).amax(dim=-1)
 
         batch_size = labels.shape[0]
-
-        flat_preds = preds.reshape(-1)
-        flat_labels = labels.reshape(-1)
         self.log("test/loss", loss, batch_size=batch_size)
-        self.log("test/acc", self.test_acc(flat_preds, flat_labels), batch_size=batch_size)
-        self.log("test/f1", self.test_f1(flat_preds, flat_labels), batch_size=batch_size)
+        self.log("test/acc", self.test_acc(preds, target), batch_size=batch_size)
+        self.log("test/f1", self.test_f1(preds, target), batch_size=batch_size)
 
         video_ids = batch.get("video_id", [f"batch_{batch_idx}"] * batch_size)
         if isinstance(video_ids, str):
             video_ids = [video_ids]
-
-        mask = labels != -100  # (B, T)
         
         # Accumulate frame predictions per base video with global frame indices
         labels_np = labels.detach().cpu().numpy()
         preds_np = preds.detach().cpu().numpy()
         confs_np = confs.detach().cpu().numpy()
-        mask_np = mask.detach().cpu().numpy()
 
         for b, segment_id in enumerate(video_ids):
-            # Parse segment_id to get base video_id and frame offset
             base_video_id, frame_offset = self._parse_segment_id(str(segment_id))
             
-            # Initialize dict for this video if needed
             if base_video_id not in self._test_frames:
                 self._test_frames[base_video_id] = {}
             
-            # Extract valid frames for this batch element
-            valid_mask = mask_np[b]
-            if valid_mask.any():
-                valid_labels = labels_np[b][valid_mask].astype(np.int64)
-                valid_preds = preds_np[b][valid_mask].astype(np.int64)
-                valid_confs = confs_np[b][valid_mask].astype(np.float32)
-                
-                # Store each frame with its global index
-                for local_idx, (gt, pred, conf) in enumerate(
-                    zip(valid_labels.tolist(), valid_preds.tolist(), valid_confs.tolist())
-                ):
-                    global_frame_idx = frame_offset + local_idx
-                    self._test_frames[base_video_id][global_frame_idx] = (gt, pred, conf)
+            # Map the clip prediction to the GLOBAL index of the LAST frame in the window
+            # This follows the original TMRNet supervision logic.
+            clip_len = int(labels_np[b].shape[0])
+            last_frame_global_idx = frame_offset + (clip_len - 1)
+            
+            # Store (GT of last frame, Pred, Conf)
+            # Use tuple instead of list since we only need the latest/only prediction per index
+            self._test_frames[base_video_id][last_frame_global_idx] = (
+                int(labels_np[b][-1]), int(preds_np[b]), float(confs_np[b])
+            )
         
         return loss
 
     def on_test_epoch_end(self):
-        """Write per-video prediction files with all frames from sliding windows."""
+        """Write per-video prediction files. Fills the first (seq_len-1) frames with first prediction."""
         if not getattr(self.trainer, "is_global_zero", True):
             return
         if not getattr(self, "_test_frames", None):
@@ -203,17 +178,27 @@ class TMRNetModule(BasePhaseModule):
         # Write one file per base video with all frame predictions
         for video_id in sorted(self._test_frames.keys()):
             frames_dict = self._test_frames[video_id]  # {global_frame_idx: (gt, pred, conf)}
-            
             if not frames_dict:
                 continue
+            
+            sorted_indices = sorted(frames_dict.keys())
+            first_idx = sorted_indices[0]
+            first_data = frames_dict[first_idx] # (gt, pred, conf)
             
             out_file = by_video_dir / f"{video_id}.txt"
             with out_file.open("w", encoding="utf-8") as f:
                 f.write("frame\tgt\tpred\tconf\n")
-                # Write frames in order of global frame index
-                for frame_idx in sorted(frames_dict.keys()):
-                    gt, pred, conf = frames_dict[frame_idx]
-                    f.write(f"{frame_idx}\tgt={int(gt)}\tpred={int(pred)}\tconf={float(conf):.6f}\n")
+                
+                # 1. Back-fill the first (seq_len - 1) frames using the first window's result
+                # This ensures the prediction file length matches the GT length exactly.
+                for i in range(first_idx):
+                    f.write(f"{i}\tgt={first_data[0]}\tpred={first_data[1]}\tconf={first_data[2]:.6f}\n")
+                
+                # 2. Write the actual predictions at their index
+                for idx in sorted_indices:
+                    gt, pred, conf = frames_dict[idx]
+                    f.write(f"{idx}\tgt={int(gt)}\tpred={int(pred)}\tconf={float(conf):.6f}\n")
+
 
         # Run evaluation on the predictions
         eval_cfg = self.cfg.get("evaluation", {})

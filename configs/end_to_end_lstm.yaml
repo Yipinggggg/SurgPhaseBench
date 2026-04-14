@@ -8,18 +8,19 @@ seed: 42
 data:
   dataset: RAMIE
   data_dir: /projects/prjs1363/SurgPhaseBench/RAMIE_data/
-  split: split3
-  batch_size: 1          # strict sequential training: one full video sequence per batch
-  shuffle_train: false   # preserve sequence order during training
-  seq_len: 128
-  num_workers: 8
+  split:       split1            # split key
+  batch_size: 64          # aligned with MTRCNet-CL default train batch size
+  shuffle_train: true      # shuffled on sequences
+  seq_len: 8               # aligned with MTRCNet-CL default sequence length
+  seq_stride: 4            # sliding window stride (1 for dense predictions, seq_len for non-overlapping)
+  num_workers: 4
   img_size: 256
   no_data_aug: false
   extra_opts: {}
 
 model:
   name: featureencoder+lstm
-  backbone: resnet50_gn
+  backbone: resnet50
   num_classes: 13
   freeze: false
   batch_size: 1
@@ -51,18 +52,18 @@ logging:
     enabled: true
     project: surgical-phase-recognition-end2end
     entity: null
-    name: 20260408_End2End_ResNet50LSTM_split3
+    name: 20260413_End2End_ResNet50LSTM_split1_ramie
     tags: []
 
   checkpoints:
-    dirpath: /projects/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/
+    dirpath: /projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/
     save_top_k: 2
     monitor: val/f1
     mode: max
     save_last: true
 
 evaluation:
-  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/test_results/
-  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/test_results/predictions/
+  output_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/test_results/
+  predictions_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/test_results/predictions/
   plot_predictions: true
-  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/test_results/plots/
+  plots_dir: /projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/test_results/plots/

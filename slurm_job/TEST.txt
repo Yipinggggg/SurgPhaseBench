@@ -22,5 +22,5 @@ conda activate eomt
 
 cd "/projects/prjs1363/SurgPhaseBench/"
 
-python scripts/test.py --config /projects/0/prjs1363/SurgPhaseBench/outputs/20260410_End2End_ResNet50LSTM_cholec80_split2/config.yaml \
---checkpoint "/projects/0/prjs1363/SurgPhaseBench/outputs/20260410_End2End_ResNet50LSTM_cholec80_split2/checkpoints/best_acc-epoch=013-val_acc=0.8072.ckpt"
+python scripts/test.py --config /projects/prjs1363/SurgPhaseBench/outputs/20260414_tmrnet_resnet50_ramie_split1/config.yaml \
+--checkpoint "/projects/prjs1363/SurgPhaseBench/outputs/20260414_tmrnet_resnet50_ramie_split1/checkpoints/best_acc-epoch=003-val_acc=0.7121.ckpt"

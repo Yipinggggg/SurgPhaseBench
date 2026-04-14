@@ -13,8 +13,14 @@ This script is for plotting the per video result for multiple models in bar plot
 
 '''
 Experiments = {
-    "DINOv2_MSTCN": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_MSTCN_DINOv2_RAMIE_split1/test_results/predictions/",
-    "ResNet50_MSTCN": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_MSTCN_resnet50_RAMIE_split1/test_results/predictions/"}
+    "SV-RCNet": "/projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/test_results/predictions/",
+    "TMRNet": "/projects/prjs1363/SurgPhaseBench/outputs/20260414_tmrnet_resnet50_ramie_split1/test_results/predictions/",
+    "TeCNO": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_MSTCN_resnet50_RAMIE_split1/test_results/predictions/",
+    "Trans-SVNet": "/projects/prjs1363/SurgPhaseBench/outputs/20260414_temporal_trans_svnet_resnet50_RAMIE_split1/test_results/predictions/",
+    "Causal-Transformer": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_ASFormer_Causal_ResNet50_RAMIE_split1/test_results/predictions/",
+    "DINO+TeCNO": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_MSTCN_DINOv2_RAMIE_split1/test_results/predictions/",
+    "DINO+Causal-Transformer": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_ASFormer_Causal_DINOv2_RAMIE_split1/test_results/predictions/",
+    }
 
 PlotsDir = "/projects/prjs1363/SurgPhaseBench/Evaluation/plots_multi_model"
 

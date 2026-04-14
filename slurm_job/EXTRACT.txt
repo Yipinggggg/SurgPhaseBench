@@ -23,6 +23,6 @@ conda activate eomt
 cd "/projects/prjs1363/SurgPhaseBench/"
 
 python scripts/extract_features.py \
-    --config /projects/0/prjs1363/SurgPhaseBench/outputs/20260412_Stage1_ViTL_DINOv2_Surgenet_RAMIE_split1/config.yaml \
-    --checkpoint /projects/0/prjs1363/SurgPhaseBench/outputs/20260412_Stage1_ViTL_DINOv2_Surgenet_RAMIE_split1/checkpoints/best_acc-epoch=002-val_acc=0.7684.ckpt \
-    --output_dir /projects/0/prjs1363/SurgPhaseBench/outputs/20260412_Stage1_ViTL_DINOv2_Surgenet_RAMIE_split1/features/ \
+    --config /projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/config.yaml \
+    --checkpoint /projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/checkpoints/best_acc-epoch=033-val_acc=0.7178.ckpt \
+    --output_dir /projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/features/ \

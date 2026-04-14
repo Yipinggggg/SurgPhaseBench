@@ -5,6 +5,7 @@ import warnings
 
 import numpy as np
 import yaml
+import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -764,7 +765,47 @@ def report_results(
     print(f"Stored evaluation report at '{out_file}'.")
     if plot_predictions:
         print(f"Stored {report['num_plots']} prediction plot(s) at '{report['plots_dir']}'.")
+
+    # Save detailed per-video results to Excel
+    export_to_excel(experiment_results[0], test_ids, nlabels, out_dir)
+
     return report
+
+
+def export_to_excel(video_results, video_ids, nlabels, out_dir):
+    """Save all metrics per video to a multi-sheet Excel file."""
+    excel_path = os.path.join(out_dir, "eval_results.xlsx")
+    writer = pd.ExcelWriter(excel_path, engine="openpyxl")
+
+    # 1. Simple Metrics (Accuracy, Balanced Accuracy, Edit Score, Overlaps)
+    simple_metrics = ["accuracy", "balanced_accuracy", "edit_score"] + [
+        f"overlap_f1_{o}" for o in [10, 25, 50, 75, 90]
+    ]
+    data_simple = []
+    for vid in video_ids:
+        row = {"video_id": vid}
+        for m in simple_metrics:
+            row[m] = video_results[vid][m]
+        data_simple.append(row)
+    pd.DataFrame(data_simple).to_excel(writer, sheet_name="General Metrics", index=False)
+
+    # 2. Per-class metrics (F1, Precision, Recall, Jaccard)
+    # We use Nan Strategy 'A' as the primary one for individual video details
+    class_metrics = ["f1", "precision", "recall", "jaccard"]
+    for m in class_metrics:
+        data_class = []
+        for vid in video_ids:
+            row = {"video_id": vid}
+            scores = video_results[vid][m]["A"]  # Using strategy A
+            for i, score in enumerate(scores):
+                row[f"Class_{i}"] = score
+            # Add Macro mean for this video
+            row["Macro_Mean"] = np.nanmean(scores)
+            data_class.append(row)
+        pd.DataFrame(data_class).to_excel(writer, sheet_name=m.capitalize(), index=False)
+
+    writer.close()
+    print(f"Detailed per-video results saved to '{excel_path}'.")
 
 
 def build_argparser():

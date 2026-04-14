@@ -6,8 +6,14 @@ Experiment_dir:
 '''
 
 Experiments = {
-    "DINOv2_MSTCN": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_MSTCN_DINOv2_RAMIE_split1/test_results",
-    "ResNet50_MSTCN": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_MSTCN_resnet50_RAMIE_split1/test_results"}
+    "SV-RCNet": "/projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/test_results",
+    "TMRNet": "/projects/prjs1363/SurgPhaseBench/outputs/20260414_tmrnet_resnet50_ramie_split1/test_results",
+    "TeCNO": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_MSTCN_resnet50_RAMIE_split1/test_results",
+    "Trans-SVNet": "/projects/prjs1363/SurgPhaseBench/outputs/20260414_temporal_trans_svnet_resnet50_RAMIE_split1/test_results",
+    "Causal-Transformer": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_ASFormer_Causal_ResNet50_RAMIE_split1/test_results",
+    "DINO+TeCNO": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_MSTCN_DINOv2_RAMIE_split1/test_results",
+    "DINO+Causal-Transformer": "/projects/prjs1363/SurgPhaseBench/outputs/20260412_Stage3_ASFormer_Causal_DINOv2_RAMIE_split1/test_results",
+    }
 
 import argparse
 import yaml
@@ -91,9 +97,9 @@ def create_radar_plot(data, metric, experiments_dict, output_path, calc_method=N
     ax.set_yticks([0.2, 0.4, 0.6, 0.8])
     ax.tick_params(axis='y', labelsize=25)
 
-    ax.legend(loc='upper right', bbox_to_anchor=(1.4, 1.1), fontsize=20)
+    ax.legend(loc='upper right', bbox_to_anchor=(1.65, 1.1), fontsize=20)
     
-    plt.title(f"{metric} across phases", fontsize=30, loc='center', pad=20)
+    plt.title(f"F1 score across phases", fontsize=30, loc='center', pad=20)
     
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()

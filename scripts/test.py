@@ -23,6 +23,11 @@ def main():
     
     mode = cfg.get("mode", "end_to_end")
     
+    # # seq_stride can be overridden at test time to ensure consistent evaluation across models
+    # if cfg.get("data", {}).get("seq_stride", 1) != 1:
+    #     print(f"Overriding seq_stride to 1 for testing (was {cfg['data']['seq_stride']})")
+    #     cfg["data"]["seq_stride"] = 1
+
     if "tmrnet" in mode.lower():
         datamodule = TMRNetDataModule(cfg)
         module = TMRNetModule.load_from_checkpoint(args.checkpoint, cfg=cfg)

@@ -57,10 +57,35 @@ class EndToEndTMRNet(nn.Module):
         self.hidden_state = None
         self._init_weights()
 
+        # 5. Optional initialization from existing LSTM model
+        pretrained_lstm_path = model_cfg.get("pretrained_lstm_path", None)
+        if pretrained_lstm_path:
+            self._init_from_lstm(pretrained_lstm_path)
+
     def _init_weights(self) -> None:
         for name, param in self.temporal.named_parameters():
             if "weight_ih" in name or "weight_hh" in name:
                 init.xavier_normal_(param)
+
+    def _init_from_lstm(self, path: str) -> None:
+        """Initialize encoder and LSTM weights from a pretrained EndToEndLSTM model.
+        
+        Args:
+            path: Path to the .pth checkpoint file
+        """
+        print(f"Initializing TMRNet from LSTM checkpoint: {path}")
+        checkpoint = torch.load(path, map_location="cpu")
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        
+        # We only want to load encoder and temporal (LSTM) weights
+        # TMRNetHead and classifier weights are different
+        filtered_dict = {
+            k: v for k, v in state_dict.items() 
+            if k.startswith("encoder.") or k.startswith("temporal.")
+        }
+        
+        msg = self.load_state_dict(filtered_dict, strict=False)
+        print(f"Loaded weights: {msg}")
 
     def reset(self) -> None:
         """Kept for API compatibility with other modules."""

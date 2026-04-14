@@ -16,12 +16,13 @@ model:
   num_classes: 13
   dropout: 0.2           # Dropout in LSTM and relational head
   freeze: False
+  pretrained_lstm_path: "/projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/checkpoints/best_acc-epoch=033-val_acc=0.7178.ckpt"
 
 data:
   dataset: RAMIE
   data_dir: "/projects/0/prjs1363/SurgPhaseBench/RAMIE_data" # Root for frames/labels
-  memory_bank_dir: "/projects/0/prjs1363/SurgPhaseBench/outputs/20260408_End2End_ResNet50LSTM_split3/features"
-  split: split3
+  memory_bank_dir: "/projects/prjs1363/SurgPhaseBench/outputs/20260413_End2End_ResNet50LSTM_split1_ramie/features"
+  split: split1
   # Original script uses frame batches (400 train, 320 val) and reshapes by seq_len=10,
   # so effective sequence batches are 40 for train and 32 for val.
   train_batch_size: 40
@@ -55,7 +56,7 @@ training:
   grad_clip: 1.0
   early_stopping:
     enabled: true
-    monitor: val/f1
+    monitor: val/acc
     mode: max
     patience: 15
 
@@ -64,18 +65,18 @@ logging:
     enabled: true
     project: surgical-phase-recognition-end2end
     entity: null
-    name: 20260410_TMRNet_RAMIE_split3_retrain
+    name: 20260414_tmrnet_resnet50_ramie_split1
     tags: []
 
   checkpoints:
-    dirpath: /projects/0/prjs1363/SurgPhaseBench/outputs/20260410_TMRNet_RAMIE_split3_retrain/
+    dirpath: /projects/0/prjs1363/SurgPhaseBench/outputs/20260414_tmrnet_resnet50_ramie_split1/
     save_top_k: 2
-    monitor: val/f1
+    monitor: val/acc
     mode: max
     save_last: true
 
 evaluation:
-  output_dir: /projects/0/prjs1363/SurgPhaseBench/outputs/20260410_TMRNet_RAMIE_split3_retrain/test_results/
-  predictions_dir: /projects/0/prjs1363/SurgPhaseBench/outputs/20260410_TMRNet_RAMIE_split3_retrain/test_results/predictions/
+  output_dir: /projects/0/prjs1363/SurgPhaseBench/outputs/20260414_tmrnet_resnet50_ramie_split1/test_results/
+  predictions_dir: /projects/0/prjs1363/SurgPhaseBench/outputs/20260414_tmrnet_resnet50_ramie_split1/test_results/predictions/
   plot_predictions: true
-  plots_dir: /projects/0/prjs1363/SurgPhaseBench/outputs/20260410_TMRNet_RAMIE_split3_retrain/test_results/plots/
+  plots_dir: /projects/0/prjs1363/SurgPhaseBench/outputs/20260414_tmrnet_resnet50_ramie_split1/test_results/plots/
