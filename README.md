@@ -12,8 +12,8 @@ The current implementation is based on PyTorch Lightning and supports experiment
 |------|------|-------------------|-------|
 | [SV-RCNet](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8240734) | End-to-end | ResNet-50 + LSTM | Classic recurrent baseline |
 | [TMRNet](https://arxiv.org/pdf/2103.16327) | End-to-end | ResNet-50 + LSTM + memory bank | Temporal memory relation modeling |
-| [TeCNO](https://arxiv.org/pdf/2003.10751) | Two-stage | ResNet-50 + TCN | Multi-stage temporal convolution |
-| [Trans-SVNet](https://arxiv.org/pdf/2103.09712) | Two-stage | ResNet-50 + TCN + Transformer | Hybrid temporal modeling |
+| [TeCNO](https://arxiv.org/pdf/2003.10751) | Two-stage / temporal | ResNet-50 + TCN | Multi-stage temporal convolution |
+| [Trans-SVNet](https://arxiv.org/pdf/2103.09712) | Two-stage / temporal | ResNet-50 + TCN + Transformer | Hybrid temporal modeling |
 | [ASFormer](https://arxiv.org/pdf/2110.08568) | Two-stage / temporal | Transformer | Transformer-based temporal modeling |
 | [Causal-Transformer](https://arxiv.org/abs/2412.04039) | Two-stage / temporal | Transformer | Causal Implementation of ASFormer - transformer-based temporal modelling |
 | [OperA](https://arxiv.org/pdf/2103.03873) | Two-stage / temporal | Transformer | Causal Transformer Temporal modelling |
