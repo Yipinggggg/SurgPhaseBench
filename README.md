@@ -46,12 +46,11 @@ We follow established evaluation practices for surgical phase recognition. The c
 
 We thank the original authors and open-source contributors whose work made this benchmark possible! Please ensure that you cite the original papers when using their methods or implementations.
 
+---
 
 ## 📦 Models & Features for RAMIE Dataset
 
 We provide pretrained models and intermediate features for surgical phase recognition on the RAMIE dataset.
-
----
 
 ### 🧠 Model Checkpoints
 
@@ -60,8 +59,6 @@ These models operate directly on raw inputs without requiring pre-extracted feat
 
 - [SV-RCNet_RAMIE.ckpt](https://huggingface.co/Yipinggggg/SurgPhaseBench/resolve/main/SV-RCNet_RAMIE.ckpt)  
 - [TMRNet_RAMIE.ckpt](https://huggingface.co/Yipinggggg/SurgPhaseBench/resolve/main/TMRNet_RAMIE.ckpt)
-
----
 
 #### 🔹 Temporal Models (Stage 2)
 These models take pre-extracted features as input and focus on temporal modeling.
@@ -72,7 +69,6 @@ These models take pre-extracted features as input and focus on temporal modeling
 
 - [Trans-SVNet_RAMIE.ckpt](https://huggingface.co/Yipinggggg/SurgPhaseBench/resolve/main/Trans-SVNet_RAMIE.ckpt)
 
----
 
 ### 🗂️ Feature Encoders & Extracted Features
 
@@ -81,12 +77,8 @@ These models are used to extract frame-level features.
 - [ResNet50_RAMIE.ckpt](https://huggingface.co/Yipinggggg/SurgPhaseBench/resolve/main/ResNet50_RAMIE.ckpt)  
 - [DINOv2_ViTL_RAMIE.ckpt](https://huggingface.co/Yipinggggg/SurgPhaseBench/resolve/main/DINOv2_ViTL_RAMIE.ckpt)
 
----
-
 #### 🔹 Pre-extracted Features
 We also release intermediate features to facilitate research on temporal modeling **without requiring access to the original surgical videos**.
 
 - [ResNet50_RAMIE_features.zip](https://huggingface.co/Yipinggggg/SurgPhaseBench/resolve/main/ResNet50_RAMIE_features.zip)  
 - [DINOv2_ViTL_RAMIE_features.zip](https://huggingface.co/Yipinggggg/SurgPhaseBench/resolve/main/DINOv2_ViTL_RAMIE_features.zip)
-
----
