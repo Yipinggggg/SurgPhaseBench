@@ -4,7 +4,7 @@ Stage 2: extract and save per-video frame features using a trained encoder.
 Usage:
   python scripts/extract_features.py \\
     --config configs/stage1_encoder.yaml \\
-    --checkpoint /path/to/best_encoder.ckpt \\
+    [--checkpoint /path/to/best_encoder.ckpt] \\
     --output_dir /path/to/features/ \\
     [--split train]   # extract only one split (default: all three)
 
@@ -34,7 +34,7 @@ sys.path.insert(0, str(repo_root))
 def parse_args():
     parser = argparse.ArgumentParser(description="Extract frame features (Stage 2)")
     parser.add_argument("--config",     required=True,  help="Path to stage1 YAML config")
-    parser.add_argument("--checkpoint", required=True,  help="Path to trained encoder .ckpt")
+    parser.add_argument("--checkpoint", default=None, help="Path to trained encoder .ckpt. Omit to use the pretrained backbone from config.")
     parser.add_argument("--output_dir", required=True,  help="Directory where .pt files are saved")
     parser.add_argument("--split",      default="all",  help="train | val | test | all")
     parser.add_argument("--batch_size", type=int, default=None,
@@ -59,7 +59,9 @@ def main():
 
     # Detect extraction mode from config or checkpoint
     mode = cfg.get("mode", "auto")
-    if mode == "auto":
+    if args.checkpoint is None:
+        mode = "stage1"
+    elif mode == "auto":
         checkpoint = torch.load(args.checkpoint, map_location="cpu")
         state_dict = checkpoint.get("state_dict", {})
         is_end_to_end = any(k.startswith("model.temporal") for k in state_dict.keys())
@@ -72,7 +74,11 @@ def main():
     else:
         print("Using EncoderModule (Frame-level) for feature extraction...")
         from src.tasks.encoder_module import EncoderModule
-        module = EncoderModule.load_from_checkpoint(args.checkpoint, cfg=cfg, map_location="cpu")
+        if args.checkpoint is None:
+            print("No checkpoint provided; using pretrained backbone weights from the config.")
+            module = EncoderModule(cfg)
+        else:
+            module = EncoderModule.load_from_checkpoint(args.checkpoint, cfg=cfg, map_location="cpu")
     
     module.eval()
 

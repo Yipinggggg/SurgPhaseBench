@@ -22,4 +22,7 @@ conda activate eomt
 
 cd "/projects/prjs1363/SurgPhaseBench/"
 
-python scripts/train.py --config /projects/prjs1363/SurgPhaseBench/configs/tmrnet.yaml
+python -m segmentation.evaluate_prototype_activations \
+  --checkpoint /path/to/checkpoints/push_last.pth \
+  --output-dir /scratch-shared/yli2/prototype-segmentation/results/20260612_ramie_multitask_train_sequential_concatfeatures \
+  --save-qualitative
